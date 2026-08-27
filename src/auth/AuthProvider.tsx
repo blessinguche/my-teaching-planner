@@ -15,8 +15,13 @@ type AuthApi = {
   ready: boolean;
   session: Session | null;
   user: User | null;
-  signInWithGoogle: () => Promise<void>;
-  signInWithMagicLink: (email: string) => Promise<void>;
+  /** True after clicking the email reset link — show “set new password” UI */
+  passwordRecovery: boolean;
+  clearPasswordRecovery: () => void;
+  signInWithPassword: (email: string, password: string) => Promise<void>;
+  signUpWithPassword: (email: string, password: string) => Promise<string>;
+  resetPassword: (email: string) => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -25,6 +30,7 @@ const AuthContext = createContext<AuthApi | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(!supabaseConfigured);
   const [session, setSession] = useState<Session | null>(null);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
 
   useEffect(() => {
     if (!supabase) {
@@ -37,8 +43,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(data.session);
       setReady(true);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       setSession(next);
+      if (event === "PASSWORD_RECOVERY") {
+        setPasswordRecovery(true);
+      }
+      if (event === "SIGNED_OUT") {
+        setPasswordRecovery(false);
+      }
     });
     return () => {
       mounted = false;
@@ -46,25 +58,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signInWithGoogle = useCallback(async () => {
+  const clearPasswordRecovery = useCallback(() => {
+    setPasswordRecovery(false);
+  }, []);
+
+  const signInWithPassword = useCallback(
+    async (email: string, password: string) => {
+      if (!supabase) throw new Error("Supabase is not configured.");
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (error) throw error;
+    },
+    [],
+  );
+
+  const signUpWithPassword = useCallback(
+    async (email: string, password: string) => {
+      if (!supabase) throw new Error("Supabase is not configured.");
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          emailRedirectTo: window.location.origin,
+        },
+      });
+      if (error) throw error;
+      if (data.session) return "Signed up and signed in.";
+      return "Check your email to confirm the account, then sign in.";
+    },
+    [],
+  );
+
+  const resetPassword = useCallback(async (email: string) => {
     if (!supabase) throw new Error("Supabase is not configured.");
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin,
-      },
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/account`,
     });
     if (error) throw error;
   }, []);
 
-  const signInWithMagicLink = useCallback(async (email: string) => {
+  const updatePassword = useCallback(async (password: string) => {
     if (!supabase) throw new Error("Supabase is not configured.");
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        emailRedirectTo: window.location.origin,
-      },
-    });
+    if (password.length < 6) {
+      throw new Error("Password must be at least 6 characters.");
+    }
+    const { error } = await supabase.auth.updateUser({ password });
     if (error) throw error;
   }, []);
 
@@ -72,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!supabase) return;
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    setPasswordRecovery(false);
   }, []);
 
   const value = useMemo<AuthApi>(
@@ -80,11 +121,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ready,
       session,
       user: session?.user ?? null,
-      signInWithGoogle,
-      signInWithMagicLink,
+      passwordRecovery,
+      clearPasswordRecovery,
+      signInWithPassword,
+      signUpWithPassword,
+      resetPassword,
+      updatePassword,
       signOut,
     }),
-    [ready, session, signInWithGoogle, signInWithMagicLink, signOut],
+    [
+      ready,
+      session,
+      passwordRecovery,
+      clearPasswordRecovery,
+      signInWithPassword,
+      signUpWithPassword,
+      resetPassword,
+      updatePassword,
+      signOut,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

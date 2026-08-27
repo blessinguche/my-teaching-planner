@@ -1,126 +1,329 @@
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { PageHeader } from "../components/AddDialog";
 import { useAuth } from "../auth/AuthProvider";
+
+type Mode = "signin" | "signup" | "reset";
 
 export function AccountPage() {
   const {
     configured,
     ready,
     user,
-    signInWithGoogle,
-    signInWithMagicLink,
+    passwordRecovery,
+    clearPasswordRecovery,
+    signInWithPassword,
+    signUpWithPassword,
+    resetPassword,
+    updatePassword,
     signOut,
   } = useAuth();
+  const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function handleGoogle() {
-    setBusy(true);
-    setStatus("");
-    try {
-      await signInWithGoogle();
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Google sign-in failed.");
-      setBusy(false);
-    }
-  }
-
-  async function handleMagic(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
     setBusy(true);
     setStatus("");
     try {
-      await signInWithMagicLink(email);
-      setStatus("Check your email for the magic link.");
+      if (mode === "signin") {
+        await signInWithPassword(email, password);
+        setStatus("Signed in.");
+      } else if (mode === "signup") {
+        if (password.length < 6) {
+          throw new Error("Password must be at least 6 characters.");
+        }
+        const msg = await signUpWithPassword(email, password);
+        setStatus(msg);
+      } else {
+        await resetPassword(email);
+        setStatus("Password reset email sent — check your inbox.");
+        setMode("signin");
+      }
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Could not send link.");
+      setStatus(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setBusy(false);
     }
   }
 
+  async function handleChangePassword(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setStatus("");
+    try {
+      if (newPassword.length < 6) {
+        throw new Error("Password must be at least 6 characters.");
+      }
+      if (newPassword !== confirmPassword) {
+        throw new Error("Passwords don’t match.");
+      }
+      await updatePassword(newPassword);
+      clearPasswordRecovery();
+      setNewPassword("");
+      setConfirmPassword("");
+      setStatus("Password updated. You can use it next time you sign in.");
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Could not update password.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!ready) {
+    return (
+      <div className="module-page page-enter">
+        <p className="muted">Checking session…</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="module-page page-enter">
+    <div className="module-page page-enter" style={{ maxWidth: 560, margin: "0 auto" }}>
       <PageHeader
         eyebrow="Your account"
         title="Account"
-        blurb="Sign in so planner data, uploads, and captures can sync across devices."
+        blurb="Email + password. Planner data only loads after you sign in."
       />
 
-      {!ready ? <p className="muted">Checking session…</p> : null}
-
       {!configured ? (
-        <section className="panel clay-panel" style={{ maxWidth: 560 }}>
+        <section className="panel clay-panel">
           <h2 className="panel-title">Not connected yet</h2>
           <p className="muted">
             Add <code>VITE_SUPABASE_URL</code> and{" "}
             <code>VITE_SUPABASE_ANON_KEY</code> (see <code>.env.example</code>),
-            enable Google in the Supabase dashboard, then redeploy. Until then
-            the app keeps working on this device via local storage.
+            enable Email auth in Supabase, then restart / redeploy.
           </p>
         </section>
       ) : null}
 
       {configured && user ? (
-        <section className="panel clay-panel" style={{ maxWidth: 560 }}>
-          <h2 className="panel-title">Signed in</h2>
-          <p>
-            <strong>{user.email ?? user.id}</strong>
-          </p>
-          <p className="hint" style={{ margin: "0.5rem 0 1rem" }}>
-            Cloud sync of glossary / todos / files is next — you’re authenticated.
-          </p>
-          <button
-            type="button"
-            className="btn"
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                await signOut();
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            Sign out
-          </button>
-        </section>
+        <>
+          {passwordRecovery ? (
+            <section className="panel clay-panel" style={{ marginBottom: "1rem" }}>
+              <h2 className="panel-title">Set a new password</h2>
+              <p className="muted" style={{ marginBottom: "1rem" }}>
+                You’re in from the reset link — choose a new password below.
+              </p>
+              <form className="dialog-form" onSubmit={handleChangePassword}>
+                <label className="field">
+                  <span>New password</span>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    disabled={busy}
+                    autoComplete="new-password"
+                    autoFocus
+                  />
+                </label>
+                <label className="field">
+                  <span>Confirm password</span>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    disabled={busy}
+                    autoComplete="new-password"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-clay"
+                  disabled={busy}
+                >
+                  {busy ? "Saving…" : "Save new password"}
+                </button>
+              </form>
+            </section>
+          ) : null}
+
+          <section className="panel clay-panel">
+            <h2 className="panel-title">Signed in</h2>
+            <p>
+              <strong>{user.email ?? user.id}</strong>
+            </p>
+            <p className="hint" style={{ margin: "0.5rem 0 1rem" }}>
+              Programme content (calendar, deadlines, Learn, quiz cards) is shared.
+              Todos, Remember pins, captures and transcripts are only on this
+              account. Sign out hides your personal data.
+            </p>
+
+            {!passwordRecovery ? (
+              <form
+                className="dialog-form"
+                style={{ marginBottom: "1rem" }}
+                onSubmit={handleChangePassword}
+              >
+                <h3 className="section-label">Change password</h3>
+                <label className="field">
+                  <span>New password</span>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    disabled={busy}
+                    autoComplete="new-password"
+                  />
+                </label>
+                <label className="field">
+                  <span>Confirm password</span>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    disabled={busy}
+                    autoComplete="new-password"
+                  />
+                </label>
+                <button type="submit" className="btn" disabled={busy}>
+                  {busy ? "Saving…" : "Update password"}
+                </button>
+              </form>
+            ) : null}
+
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <Link className="btn btn-primary btn-clay" to="/">
+                Open planner
+              </Link>
+              <button
+                type="button"
+                className="btn"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await signOut();
+                    setStatus("Signed out.");
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+          </section>
+        </>
       ) : null}
 
-      {configured && !user && ready ? (
-        <section className="panel clay-panel" style={{ maxWidth: 560 }}>
-          <h2 className="panel-title">Sign in</h2>
+      {configured && !user ? (
+        <section className="panel clay-panel">
+          <h2 className="panel-title">
+            {mode === "signin"
+              ? "Sign in"
+              : mode === "signup"
+                ? "Create account"
+                : "Reset password"}
+          </h2>
           <p className="muted" style={{ marginBottom: "1rem" }}>
-            Private account for you only — Google OAuth or email magic link.
+            Use your Google email if you like — this is a normal email +
+            password login (no Google button).
           </p>
-          <button
-            type="button"
-            className="btn btn-primary btn-clay"
-            disabled={busy}
-            onClick={handleGoogle}
-          >
-            Continue with Google
-          </button>
 
-          <form className="dialog-form" style={{ marginTop: "1.25rem" }} onSubmit={handleMagic}>
+          <form className="dialog-form" onSubmit={handleSubmit}>
             <label className="field">
-              <span>Or magic link</span>
+              <span>Email</span>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@email.com"
+                placeholder="you@gmail.com"
                 required
                 disabled={busy}
+                autoComplete="email"
               />
             </label>
-            <button type="submit" className="btn" disabled={busy}>
-              Email me a link
+            {mode !== "reset" ? (
+              <label className="field">
+                <span>Password</span>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={busy}
+                  autoComplete={
+                    mode === "signup" ? "new-password" : "current-password"
+                  }
+                  minLength={6}
+                />
+              </label>
+            ) : null}
+            <button
+              type="submit"
+              className="btn btn-primary btn-clay"
+              disabled={busy}
+            >
+              {busy
+                ? "Working…"
+                : mode === "signin"
+                  ? "Sign in"
+                  : mode === "signup"
+                    ? "Create account"
+                    : "Send reset email"}
             </button>
           </form>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "0.5rem",
+              flexWrap: "wrap",
+              marginTop: "1rem",
+            }}
+          >
+            {mode !== "signin" ? (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setMode("signin");
+                  setStatus("");
+                }}
+              >
+                Sign in
+              </button>
+            ) : null}
+            {mode !== "signup" ? (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setMode("signup");
+                  setStatus("");
+                }}
+              >
+                Create account
+              </button>
+            ) : null}
+            {mode !== "reset" ? (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setMode("reset");
+                  setStatus("");
+                }}
+              >
+                Forgot password
+              </button>
+            ) : null}
+          </div>
         </section>
       ) : null}
 
