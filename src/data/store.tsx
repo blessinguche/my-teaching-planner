@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { createSeedData, SEED_VERSION } from "./seed";
+import { createSeedData } from "./seed";
 import { deleteStoredFile } from "./fileStore";
 import { scheduleAfterReview } from "./srs";
 import type {
@@ -18,11 +18,13 @@ import type {
   PlannerEvent,
   ReminderPin,
   ResourceLink,
+  SrsCardProgress,
   SrsRating,
   TaskItem,
 } from "./types";
 
-const STORAGE_KEY = "qts-planner-data";
+const LEGACY_STORAGE_KEY = "qts-planner-data";
+const PERSONAL_PREFIX = "qts-planner-personal:";
 
 export function uid(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -32,50 +34,248 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function normalize(data: AppData): AppData {
+/** Per-account only — todos, remember pins, captures, SRS progress, personal notes */
+type PersonalData = {
+  version: number;
+  tasks: TaskItem[];
+  reminders: ReminderPin[];
+  captures: CaptureItem[];
+  srs: Record<string, SrsCardProgress>;
+  glossaryNotes: Record<string, string>;
+  acronymNotes: Record<string, string>;
+  assessmentDone: Record<string, boolean>;
+  assessmentNotes: Record<string, string>;
+  resourceNotes: Record<string, string>;
+  /** User-added items (not in shared programme seed) */
+  customGlossary: GlossaryEntry[];
+  customAcronyms: Acronym[];
+  customEvents: PlannerEvent[];
+  customAssessments: AssessmentItem[];
+  customResources: ResourceLink[];
+};
+
+function emptyPersonal(): PersonalData {
+  const seed = createSeedData();
   return {
-    ...data,
-    srs: data.srs ?? {},
-    assessments: (data.assessments ?? []).map((a) => ({
-      ...a,
-      notes: a.notes ?? "",
-    })),
-    tasks: (data.tasks ?? []).map((t) => ({
-      ...t,
-      notes: t.notes ?? "",
-    })),
-    glossary: (data.glossary ?? []).map((g) => ({
-      ...g,
-      notes: g.notes ?? "",
-    })),
-    acronyms: (data.acronyms ?? []).map((a) => ({
-      ...a,
-      notes: a.notes ?? "",
-    })),
-    resources: (data.resources ?? []).map((r) => ({
-      ...r,
-      notes: r.notes ?? "",
-    })),
-    captures: data.captures ?? [],
+    version: 1,
+    tasks: seed.tasks.map((t) => ({ ...t, notes: t.notes ?? "" })),
+    reminders: [...seed.reminders],
+    captures: [],
+    srs: {},
+    glossaryNotes: {},
+    acronymNotes: {},
+    assessmentDone: {},
+    assessmentNotes: {},
+    resourceNotes: {},
+    customGlossary: [],
+    customAcronyms: [],
+    customEvents: [],
+    customAssessments: [],
+    customResources: [],
   };
 }
 
-function loadData(): AppData {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return createSeedData();
-    const parsed = JSON.parse(raw) as AppData;
-    if (!parsed.seedVersion || parsed.seedVersion < SEED_VERSION) {
-      return createSeedData();
-    }
-    return normalize(parsed);
-  } catch {
-    return createSeedData();
+function personalFromFullDump(data: AppData): PersonalData {
+  const seed = createSeedData();
+  const seedGloss = new Set(seed.glossary.map((g) => g.id));
+  const seedAcr = new Set(seed.acronyms.map((a) => a.id));
+  const seedEvt = new Set(seed.events.map((e) => e.id));
+  const seedAssess = new Set(seed.assessments.map((a) => a.id));
+  const seedRes = new Set(seed.resources.map((r) => r.id));
+
+  const glossaryNotes: Record<string, string> = {};
+  for (const g of data.glossary ?? []) {
+    if (seedGloss.has(g.id) && g.notes?.trim()) glossaryNotes[g.id] = g.notes;
   }
+  const acronymNotes: Record<string, string> = {};
+  for (const a of data.acronyms ?? []) {
+    if (seedAcr.has(a.id) && a.notes?.trim()) acronymNotes[a.id] = a.notes;
+  }
+  const assessmentDone: Record<string, boolean> = {};
+  const assessmentNotes: Record<string, string> = {};
+  for (const a of data.assessments ?? []) {
+    if (!seedAssess.has(a.id)) continue;
+    if (a.done) assessmentDone[a.id] = true;
+    if (a.notes?.trim()) assessmentNotes[a.id] = a.notes;
+  }
+  const resourceNotes: Record<string, string> = {};
+  for (const r of data.resources ?? []) {
+    if (seedRes.has(r.id) && r.notes?.trim()) resourceNotes[r.id] = r.notes;
+  }
+
+  return {
+    version: 1,
+    tasks: (data.tasks ?? []).map((t) => ({ ...t, notes: t.notes ?? "" })),
+    reminders: data.reminders ?? [],
+    captures: data.captures ?? [],
+    srs: data.srs ?? {},
+    glossaryNotes,
+    acronymNotes,
+    assessmentDone,
+    assessmentNotes,
+    resourceNotes,
+    customGlossary: (data.glossary ?? []).filter((g) => !seedGloss.has(g.id)),
+    customAcronyms: (data.acronyms ?? []).filter((a) => !seedAcr.has(a.id)),
+    customEvents: (data.events ?? []).filter((e) => !seedEvt.has(e.id)),
+    customAssessments: (data.assessments ?? []).filter(
+      (a) => !seedAssess.has(a.id),
+    ),
+    customResources: (data.resources ?? []).filter((r) => !seedRes.has(r.id)),
+  };
 }
 
-function saveData(data: AppData) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+function scorePersonal(p: PersonalData): number {
+  return (
+    p.tasks.length +
+    p.reminders.length +
+    p.captures.length +
+    Object.keys(p.srs).length +
+    p.customGlossary.length
+  );
+}
+
+function parseMaybeFull(raw: string): PersonalData | null {
+  try {
+    const parsed = JSON.parse(raw) as AppData & Partial<PersonalData>;
+    // Already personal-shaped
+    if (parsed.version && Array.isArray(parsed.tasks) && parsed.captures) {
+      return {
+        ...emptyPersonal(),
+        ...parsed,
+        tasks: parsed.tasks ?? [],
+        reminders: parsed.reminders ?? [],
+        captures: parsed.captures ?? [],
+        srs: parsed.srs ?? {},
+        glossaryNotes: parsed.glossaryNotes ?? {},
+        acronymNotes: parsed.acronymNotes ?? {},
+        assessmentDone: parsed.assessmentDone ?? {},
+        assessmentNotes: parsed.assessmentNotes ?? {},
+        resourceNotes: parsed.resourceNotes ?? {},
+        customGlossary: parsed.customGlossary ?? [],
+        customAcronyms: parsed.customAcronyms ?? [],
+        customEvents: parsed.customEvents ?? [],
+        customAssessments: parsed.customAssessments ?? [],
+        customResources: parsed.customResources ?? [],
+      };
+    }
+    // Full app dump (legacy / old per-user blob)
+    if (parsed.seedVersion || parsed.glossary || parsed.events) {
+      return personalFromFullDump(parsed as AppData);
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+/** Recover the richest personal blob still on this device. */
+function recoverPersonal(userId: string): PersonalData {
+  const candidates: PersonalData[] = [];
+
+  const personalKey = `${PERSONAL_PREFIX}${userId}`;
+  const personalRaw = localStorage.getItem(personalKey);
+  if (personalRaw) {
+    const p = parseMaybeFull(personalRaw);
+    if (p) candidates.push(p);
+  }
+
+  const userFull = localStorage.getItem(`${LEGACY_STORAGE_KEY}:${userId}`);
+  if (userFull) {
+    const p = parseMaybeFull(userFull);
+    if (p) candidates.push(p);
+  }
+
+  const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+  if (legacy) {
+    const p = parseMaybeFull(legacy);
+    if (p) candidates.push(p);
+  }
+
+  // Other accounts' dumps on this browser (e.g. old Google UUID) — reclaim richest
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const k = localStorage.key(i);
+    if (!k) continue;
+    if (k === personalKey || k === LEGACY_STORAGE_KEY) continue;
+    if (
+      !k.startsWith(`${LEGACY_STORAGE_KEY}:`) &&
+      !k.startsWith(PERSONAL_PREFIX)
+    ) {
+      continue;
+    }
+    if (k.endsWith(`:${userId}`) || k === `${PERSONAL_PREFIX}${userId}`) continue;
+    const raw = localStorage.getItem(k);
+    if (!raw) continue;
+    const p = parseMaybeFull(raw);
+    if (p) candidates.push(p);
+  }
+
+  if (candidates.length === 0) return emptyPersonal();
+  candidates.sort((a, b) => scorePersonal(b) - scorePersonal(a));
+  return candidates[0]!;
+}
+
+function composeAppData(personal: PersonalData): AppData {
+  const shared = createSeedData();
+  return {
+    seedVersion: shared.seedVersion,
+    acronyms: [
+      ...shared.acronyms.map((a) => ({
+        ...a,
+        notes: personal.acronymNotes[a.id] ?? "",
+      })),
+      ...personal.customAcronyms,
+    ],
+    glossary: [
+      ...shared.glossary.map((g) => ({
+        ...g,
+        notes: personal.glossaryNotes[g.id] ?? "",
+      })),
+      ...personal.customGlossary,
+    ],
+    events: [...shared.events, ...personal.customEvents].sort(
+      (a, b) =>
+        a.date.localeCompare(b.date) || a.start.localeCompare(b.start),
+    ),
+    assessments: [
+      ...shared.assessments.map((a) => ({
+        ...a,
+        done: personal.assessmentDone[a.id] ?? false,
+        notes: personal.assessmentNotes[a.id] ?? "",
+      })),
+      ...personal.customAssessments,
+    ].sort((a, b) => a.date.localeCompare(b.date)),
+    tasks: personal.tasks,
+    resources: [
+      ...shared.resources.map((r) => ({
+        ...r,
+        notes: personal.resourceNotes[r.id] ?? "",
+      })),
+      ...personal.customResources,
+    ],
+    reminders: personal.reminders,
+    captures: personal.captures,
+    srs: personal.srs,
+  };
+}
+
+function extractPersonal(data: AppData): PersonalData {
+  return personalFromFullDump(data);
+}
+
+function savePersonal(userId: string, data: AppData) {
+  const personal = extractPersonal(data);
+  localStorage.setItem(
+    `${PERSONAL_PREFIX}${userId}`,
+    JSON.stringify(personal),
+  );
+}
+
+function loadAppData(userId: string): AppData {
+  const personal = recoverPersonal(userId);
+  const composed = composeAppData(personal);
+  // Persist recovered personal under this account so it sticks
+  savePersonal(userId, composed);
+  return composed;
 }
 
 type StoreApi = {
@@ -119,28 +319,32 @@ type StoreApi = {
   addReminder: (input: { text: string }) => void;
   addCapture: (
     input: Omit<CaptureItem, "id" | "createdAt" | "updatedAt">,
-  ) => void;
+  ) => string;
   updateCapture: (id: string, patchData: Partial<CaptureItem>) => void;
-  deleteCapture: (id: string) => Promise<void>;
   resetSeed: () => void;
 };
 
 const StoreContext = createContext<StoreApi | null>(null);
 
-export function DataProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<AppData>(() => {
-    const initial = loadData();
-    saveData(initial);
-    return initial;
-  });
+export function DataProvider({
+  userId,
+  children,
+}: {
+  userId: string;
+  children: ReactNode;
+}) {
+  const [data, setData] = useState<AppData>(() => loadAppData(userId));
 
-  const patch = useCallback((updater: (prev: AppData) => AppData) => {
-    setData((prev) => {
-      const next = updater(prev);
-      saveData(next);
-      return next;
-    });
-  }, []);
+  const patch = useCallback(
+    (updater: (prev: AppData) => AppData) => {
+      setData((prev) => {
+        const next = updater(prev);
+        savePersonal(userId, next);
+        return next;
+      });
+    },
+    [userId],
+  );
 
   const toggleTask = useCallback(
     (id: string) => {
@@ -431,56 +635,39 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const addCapture = useCallback(
     (input: Omit<CaptureItem, "id" | "createdAt" | "updatedAt">) => {
       const stamp = nowIso();
+      const id = uid("cap");
       const item: CaptureItem = {
         ...input,
-        id: uid("cap"),
+        id,
         createdAt: stamp,
         updatedAt: stamp,
       };
       patch((prev) => ({ ...prev, captures: [item, ...prev.captures] }));
+      return id;
     },
     [patch],
   );
 
   const updateCapture = useCallback(
     (id: string, patchData: Partial<CaptureItem>) => {
+      const cleaned = Object.fromEntries(
+        Object.entries(patchData).filter(([, v]) => v !== undefined),
+      ) as Partial<CaptureItem>;
       patch((prev) => ({
         ...prev,
         captures: prev.captures.map((c) =>
-          c.id === id ? { ...c, ...patchData, updatedAt: nowIso() } : c,
+          c.id === id ? { ...c, ...cleaned, updatedAt: nowIso() } : c,
         ),
       }));
     },
     [patch],
   );
 
-  const deleteCapture = useCallback(
-    async (id: string) => {
-      let audioFileId: string | undefined;
-      patch((prev) => {
-        const existing = prev.captures.find((c) => c.id === id);
-        audioFileId = existing?.audioFileId;
-        return {
-          ...prev,
-          captures: prev.captures.filter((c) => c.id !== id),
-        };
-      });
-      if (audioFileId) {
-        try {
-          await deleteStoredFile(audioFileId);
-        } catch {
-          /* best-effort */
-        }
-      }
-    },
-    [patch],
-  );
-
   const resetSeed = useCallback(() => {
-    const fresh = createSeedData();
-    saveData(fresh);
+    const fresh = composeAppData(emptyPersonal());
+    savePersonal(userId, fresh);
     setData(fresh);
-  }, []);
+  }, [userId]);
 
   const value = useMemo(
     () => ({
@@ -507,7 +694,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
       addReminder,
       addCapture,
       updateCapture,
-      deleteCapture,
       resetSeed,
     }),
     [
@@ -534,7 +720,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
       addReminder,
       addCapture,
       updateCapture,
-      deleteCapture,
       resetSeed,
     ],
   );
