@@ -44,14 +44,58 @@ export function PlannerPage() {
   const [track, setTrack] = useState<"ft" | "all">("ft");
   const [addOpen, setAddOpen] = useState(false);
 
+  const allEvents = useMemo(() => {
+    const schoolClosures = data.schools.flatMap((school) =>
+      school.closures.map(
+        (c): PlannerEvent => ({
+          id: `closure-${school.id}-${c.id}`,
+          date: c.start,
+          endDate: c.end,
+          start: "00:00",
+          end: "23:59",
+          title: `${school.shortName}: ${c.label}`,
+          detail: c.kind === "inset" ? "School closed to students" : undefined,
+          kind: "personal",
+          module: "Break",
+          track: "all",
+          schoolId: school.id,
+          source: "school",
+        }),
+      ),
+    );
+    const homework = data.homework.map(
+      (h): PlannerEvent => ({
+        id: `hw-${h.id}`,
+        date: h.dueDate,
+        start: "09:00",
+        end: "09:00",
+        title: `HW: ${h.title}`,
+        kind: "deadline",
+        isAssessment: true,
+        schoolId: h.schoolId,
+        source: "school",
+      }),
+    );
+    return [...data.events, ...schoolClosures, ...homework];
+  }, [data.events, data.schools, data.homework]);
+
+  const meetingOptions = useMemo(
+    () =>
+      allEvents
+        .filter((e) => e.kind === "meeting")
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 40),
+    [allEvents],
+  );
+
   const filtered = useMemo(() => {
-    return data.events.filter((ev) => {
+    return allEvents.filter((ev) => {
       if (!matchesKind(ev, kind)) return false;
       const t = ev.track ?? "all";
       if (track === "ft" && (t === "pt" || t === "extension")) return false;
       return true;
     });
-  }, [data.events, kind, track]);
+  }, [allEvents, kind, track]);
 
   const agenda = useMemo(() => {
     const horizon = view === "agenda" ? addDays(today, 60) : addDays(today, 120);
@@ -78,9 +122,9 @@ export function PlannerPage() {
     const ics = buildIcs({
       events: filtered,
       assessments: data.assessments,
-      calendarName: "QTS Planner",
+      calendarName: "Teaching Planner",
     });
-    downloadIcs("qts-planner.ics", ics);
+    downloadIcs("teaching-planner.ics", ics);
   }
 
   const showCalendar = view === "month" || view === "week" || view === "day";
@@ -88,9 +132,9 @@ export function PlannerPage() {
   return (
     <div className="module-page page-enter">
       <PageHeader
-        eyebrow="Programme calendar 2026–27"
-        title="Planner"
-        blurb="Month / week / day calendar, breaks marked, export .ics for Google Calendar."
+        eyebrow="Central calendar"
+        title="Calendar"
+        blurb="QTS, school terms, deadlines and meetings in one place. Click a day to preview · double-click for day view."
         actions={
           <>
             <button type="button" className="btn" onClick={exportIcs}>
@@ -194,9 +238,10 @@ export function PlannerPage() {
             mode={view as "month" | "week" | "day"}
             cursor={cursor}
             events={filtered}
-            onSelectDate={(iso) => {
+            onSelectDate={(iso) => setCursor(iso)}
+            onOpenDay={(iso) => {
               setCursor(iso);
-              if (view === "month") setView("day");
+              setView("day");
             }}
           />
 
@@ -306,7 +351,7 @@ export function PlannerPage() {
       <AddDialog
         open={addOpen}
         title="Add calendar item"
-        description="Training day, meeting, deadline, or break."
+        description="Deadline, meeting, training day, or break. Deadlines can link to a meeting."
         fields={[
           { name: "title", label: "Title", required: true },
           { name: "date", label: "Date", type: "date", required: true, defaultValue: cursor },
@@ -318,17 +363,34 @@ export function PlannerPage() {
             label: "Type",
             type: "select",
             options: [
-              { value: "itap", label: "Training / ITAP" },
               { value: "deadline", label: "Deadline" },
               { value: "meeting", label: "Meeting" },
+              { value: "itap", label: "Training / ITAP" },
               { value: "personal", label: "Break / personal" },
+            ],
+          },
+          {
+            name: "link",
+            label: "Link (Meet / Teams / docs)",
+            placeholder: "https://…",
+          },
+          {
+            name: "linkedMeetingId",
+            label: "Link to meeting (optional)",
+            type: "select",
+            options: [
+              { value: "", label: "None" },
+              ...meetingOptions.map((m) => ({
+                value: m.id,
+                label: `${m.date} · ${m.title.slice(0, 48)}`,
+              })),
             ],
           },
           { name: "detail", label: "Notes", type: "textarea" },
         ]}
         onClose={() => setAddOpen(false)}
         onSubmit={(v) => {
-          const kindVal = (v.kind || "itap") as EventKind;
+          const kindVal = (v.kind || "deadline") as EventKind;
           const isBreak = kindVal === "personal";
           addEvent({
             date: v.date,
@@ -341,6 +403,9 @@ export function PlannerPage() {
             track: "all",
             isAssessment: kindVal === "deadline",
             module: isBreak ? "Break" : "Added by you",
+            link: v.link || undefined,
+            linkedMeetingId: v.linkedMeetingId || undefined,
+            source: "personal",
           });
         }}
       />

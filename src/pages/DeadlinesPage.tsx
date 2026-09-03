@@ -88,9 +88,9 @@ export function DeadlinesPage() {
                     (e) => e.kind === "deadline" || e.isAssessment,
                   ),
                   assessments: data.assessments,
-                  calendarName: "QTS Deadlines",
+                  calendarName: "Teaching Planner Deadlines",
                 });
-                downloadIcs("qts-deadlines.ics", ics);
+                downloadIcs("teaching-planner-deadlines.ics", ics);
               }}
             >
               Export .ics

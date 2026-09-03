@@ -1568,6 +1568,34 @@ input[type="file"] {
   color: var(--sky);
 }
 
+.sync-banner {
+  margin-bottom: 1rem;
+}
+
+.sync-sql {
+  margin-top: 0.75rem;
+}
+
+.sync-sql-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.sync-sql-pre {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  max-height: 180px;
+  overflow: auto;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  background: var(--clay-sunken);
+  border-radius: 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 @media (max-width: 800px) {
   .cal-week {
     grid-template-columns: 1fr;
@@ -1576,4 +1604,57 @@ input[type="file"] {
   .cal-cell {
     min-height: 48px;
   }
+}
+
+/* ——— Hub / school ——— */
+.hub-jump-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.school-shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.65rem;
+}
+
+.school-shortcut {
+  padding: 0.9rem 1rem;
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: none;
+  transition: transform 0.15s var(--ease), background 0.15s ease;
+}
+
+.school-shortcut:hover {
+  transform: translateY(-1px);
+  background: var(--surface-2);
+}
+
+.attendance-row,
+.todo-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.attendance-row:last-child,
+.todo-row:last-child {
+  border-bottom: none;
+}
+
+.todo-row label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  width: 100%;
+}
+
+.attendance-row select {
+  min-width: 8rem;
 }

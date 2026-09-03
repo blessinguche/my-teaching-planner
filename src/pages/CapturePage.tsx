@@ -347,7 +347,7 @@ export function CapturePage() {
       <PageHeader
         eyebrow="Capture"
         title="Capture"
-        blurb="Notes and recordings — kept forever, autosaved while you record."
+        blurb="Notes and recordings stay on this device (not the account). Autosaved while you record. To-dos you add here still sync."
         actions={
           mode === "hub" ? (
             <>

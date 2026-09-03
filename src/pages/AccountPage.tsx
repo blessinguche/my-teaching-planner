@@ -1,7 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../components/AddDialog";
+import { SetupSqlBlock } from "../components/SyncBanner";
 import { useAuth } from "../auth/AuthProvider";
+import { fetchAccountCloud } from "../data/accountSync";
 
 type Mode = "signin" | "signup" | "reset";
 
@@ -25,6 +27,7 @@ export function AccountPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const [needsSetup, setNeedsSetup] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -76,6 +79,20 @@ export function AccountPage() {
     }
   }
 
+  useEffect(() => {
+    if (!user) {
+      setNeedsSetup(false);
+      return;
+    }
+    let cancelled = false;
+    fetchAccountCloud(user.id).then((result) => {
+      if (!cancelled) setNeedsSetup(result.kind === "missing-table");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
   if (!ready) {
     return (
       <div className="module-page page-enter">
@@ -89,7 +106,7 @@ export function AccountPage() {
       <PageHeader
         eyebrow="Your account"
         title="Account"
-        blurb="Email + password. Planner data only loads after you sign in."
+        blurb="Email + password. To-do, Learn, Due and Quiz follow this account. Captures stay on the device you recorded them on."
       />
 
       {!configured ? (
@@ -154,10 +171,22 @@ export function AccountPage() {
               <strong>{user.email ?? user.id}</strong>
             </p>
             <p className="hint" style={{ margin: "0.5rem 0 1rem" }}>
-              Programme content (calendar, deadlines, Learn, quiz cards) is shared.
-              Todos, Remember pins, captures and transcripts are only on this
-              account. Sign out hides your personal data.
+              Programme content (calendar, shared Learn cards, due dates) is the
+              same on every device. Your To-do list, Remember pins, Learn notes,
+              Due check-offs, Quiz progress and anything you add yourself sync
+              with this account. Captures and recordings stay on this device
+              only.
             </p>
+
+            {needsSetup ? (
+              <div style={{ marginBottom: "1rem" }}>
+                <h3 className="section-label">Link To-do / Learn / Due to this account</h3>
+                <p className="muted">
+                  Run this once in Supabase → SQL Editor, then open the planner.
+                </p>
+                <SetupSqlBlock />
+              </div>
+            ) : null}
 
             {!passwordRecovery ? (
               <form
@@ -198,7 +227,7 @@ export function AccountPage() {
 
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
               <Link className="btn btn-primary btn-clay" to="/">
-                Open planner
+                Open teaching planner
               </Link>
               <button
                 type="button"

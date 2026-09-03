@@ -1,6 +1,6 @@
-# QTS Planner
+# Teaching Planner
 
-Private QTS operating system — planner, knowledge, retrieval practice, resources, and capture. Built for one person across Mac, Windows, and phone.
+Private teaching planner — schools, central calendar, QTS training tools, knowledge, practice, and capture. Built for one person across Mac, Windows, and phone.
 
 ## Run locally
 
@@ -9,7 +9,14 @@ npm install
 npm run dev
 ```
 
-Copy `.env.example` → `.env` when you’re ready for Account / OAuth (optional for local-only use).
+Copy `.env.example` → `.env` for Account (required to use the app).
+
+## Areas
+
+- **Hub:** Central calendar for QTS + school events, deadlines, and meetings.
+- **Schools:** Create a school (Clayton Hall Academy is seeded) → lesson plans, timetable, roster, attendance, grades, behaviour, homework, comms, and more.
+- **QTS:** Training dashboard, to-dos, deadlines, learn, quiz, links, and capture — own side nav.
+- **Account:** Sign-in. To-do / Learn / Due / Quiz sync with the account. Captures stay on-device.
 
 ## Capture
 
@@ -17,15 +24,14 @@ Copy `.env.example` → `.env` when you’re ready for Account / OAuth (optional
 - **Live transcript** is generated from speech while you record (best in Chrome / Edge).
 - Open a capture to replay audio and edit the transcript.
 
-## Account (OAuth)
+## Account
 
 1. Create a free [Supabase](https://supabase.com) project.
-2. Auth → Providers → enable **Google** (and/or Email).
+2. Auth → Providers → enable **Email** (password).
 3. Auth → URL config: Site URL + redirect URLs for `http://localhost:5173` and your Vercel domain.
-4. Put URL + anon key in `.env` / Vercel env vars (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
-5. Open **Account** in the app → Continue with Google.
-
-Cloud sync of todos / glossary / files onto that account is the next build step after you sign in once.
+4. Put URL + anon key in `.env` / Vercel env vars (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` or `VITE_SUPABASE_PUBLISHABLE_KEY`).
+5. SQL Editor → paste `supabase/schema.sql` → Run (once). The app also shows this SQL if the table is missing.
+6. Open **Account** in the app → create / sign in.
 
 ## Deploy (Vercel)
 

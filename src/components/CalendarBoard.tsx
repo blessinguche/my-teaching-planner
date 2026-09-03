@@ -42,9 +42,17 @@ type Props = {
   cursor: string; // YYYY-MM-DD
   events: PlannerEvent[];
   onSelectDate: (iso: string) => void;
+  /** Open day view — only fires on double-click in month/week */
+  onOpenDay?: (iso: string) => void;
 };
 
-export function CalendarBoard({ mode, cursor, events, onSelectDate }: Props) {
+export function CalendarBoard({
+  mode,
+  cursor,
+  events,
+  onSelectDate,
+  onOpenDay,
+}: Props) {
   const today = todayISO();
   const cursorDate = parseISO(cursor);
   const year = cursorDate.getFullYear();
@@ -87,6 +95,13 @@ export function CalendarBoard({ mode, cursor, events, onSelectDate }: Props) {
                 <div>
                   <strong>{ev.title}</strong>
                   {ev.detail ? <p className="hint">{ev.detail}</p> : null}
+                  {ev.link ? (
+                    <p className="hint">
+                      <a href={ev.link} target="_blank" rel="noreferrer">
+                        Open link
+                      </a>
+                    </p>
+                  ) : null}
                 </div>
               </li>
             ))
@@ -114,6 +129,7 @@ export function CalendarBoard({ mode, cursor, events, onSelectDate }: Props) {
                 isSelected ? " is-selected" : ""
               }`}
               onClick={() => onSelectDate(iso)}
+              onDoubleClick={() => onOpenDay?.(iso)}
             >
               <div className="cal-week-head">
                 {new Intl.DateTimeFormat("en-GB", {
@@ -175,7 +191,9 @@ export function CalendarBoard({ mode, cursor, events, onSelectDate }: Props) {
                 hasDeadline ? " has-deadline" : ""
               }${hasBreak ? " has-break" : ""}`}
               onClick={() => onSelectDate(iso)}
-              aria-label={`${iso}, ${list.length} items`}
+              onDoubleClick={() => onOpenDay?.(iso)}
+              aria-label={`${iso}, ${list.length} items. Double-click for day view.`}
+              title="Click to select · double-click for day view"
             >
               <span className="cal-date">{parseISO(iso).getDate()}</span>
               <span className="cal-dots" aria-hidden>
