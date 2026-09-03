@@ -26,7 +26,7 @@
   }
 }
 
-/* ——— Nav ——— */
+/* â€”â€”â€” Nav â€”â€”â€” */
 .side-nav {
   display: flex;
   flex-direction: column;
@@ -107,7 +107,7 @@
   display: none;
 }
 
-/* ——— Buttons (clay only here) ——— */
+/* â€”â€”â€” Buttons (clay only here) â€”â€”â€” */
 .btn,
 .clay-btn {
   display: inline-flex;
@@ -189,7 +189,7 @@
   line-height: 1;
 }
 
-/* ——— Surfaces ——— */
+/* â€”â€”â€” Surfaces â€”â€”â€” */
 .panel,
 .clay-panel,
 .clay-panel-sm,
@@ -1189,7 +1189,7 @@ input[type="file"] {
   }
 }
 
-/* Short viewport (but still wide): left rail → top nav strip */
+/* Short viewport (but still wide): left rail â†’ top nav strip */
 @media (max-height: 720px) and (min-width: 901px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -1568,6 +1568,34 @@ input[type="file"] {
   color: var(--sky);
 }
 
+.sync-banner {
+  margin-bottom: 1rem;
+}
+
+.sync-sql {
+  margin-top: 0.75rem;
+}
+
+.sync-sql-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.sync-sql-pre {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  max-height: 180px;
+  overflow: auto;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  background: var(--clay-sunken);
+  border-radius: 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 @media (max-width: 800px) {
   .cal-week {
     grid-template-columns: 1fr;
@@ -1576,4 +1604,237 @@ input[type="file"] {
   .cal-cell {
     min-height: 48px;
   }
+}
+
+/* --- Hub / school --- */
+.hub-jump-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.school-shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.65rem;
+}
+
+.school-shortcut {
+  padding: 0.9rem 1rem;
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: none;
+  transition: transform 0.15s var(--ease), background 0.15s ease;
+}
+
+.school-shortcut:hover {
+  transform: translateY(-1px);
+  background: var(--surface-2);
+}
+
+.attendance-row,
+.todo-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.attendance-row:last-child,
+.todo-row:last-child {
+  border-bottom: none;
+}
+
+.todo-row label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  width: 100%;
+}
+
+.attendance-row select {
+  min-width: 8rem;
+}
+
+/* --- Rich notes --- */
+.note-editor {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.note-editor.is-disabled {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.note-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.4rem 0.45rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.note-tool {
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 0.28rem 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.note-tool:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.note-tool.is-active,
+.note-tool.is-recording {
+  background: var(--peach-soft, #f6d5c4);
+  color: var(--ink);
+}
+
+.note-tool-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border);
+  margin: 0 0.15rem;
+}
+
+.note-surface {
+  padding: 0.7rem 0.85rem;
+  outline: none;
+  min-height: 7rem;
+  line-height: 1.45;
+}
+
+.note-surface:empty:before {
+  content: attr(data-placeholder);
+  color: var(--ink-soft);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.note-surface h2,
+.note-html h2 {
+  font-size: 1.15rem;
+  margin: 0.35rem 0;
+  font-family: var(--font-display);
+}
+
+.note-surface h3,
+.note-html h3 {
+  font-size: 1rem;
+  margin: 0.3rem 0;
+  font-family: var(--font-display);
+}
+
+.note-surface p,
+.note-html p {
+  margin: 0.25rem 0;
+}
+
+.note-highlight,
+.note-surface mark,
+.note-html mark {
+  background: #ffe08a;
+  border-radius: 3px;
+  padding: 0 0.1em;
+}
+
+.note-audio-chip {
+  display: block;
+  margin: 0.45rem 0;
+  padding: 0.35rem 0.5rem;
+  border-radius: 10px;
+  background: var(--mint-soft);
+  color: var(--mint-deep);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.note-audio-chip audio {
+  display: block;
+  width: 100%;
+  margin-top: 0.25rem;
+}
+
+.note-html.is-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.note-html.is-clamp .note-audio-chip {
+  display: none;
+}
+
+.search-field {
+  margin-bottom: 0.75rem;
+  flex: 1;
+  min-width: 160px;
+}
+
+.student-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.student-picker-list {
+  max-height: 160px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.student-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.student-pick:last-child {
+  border-bottom: none;
+}
+
+.student-pick:hover {
+  background: var(--surface-2);
+}
+
+.student-pick.is-selected {
+  background: var(--mint-soft);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

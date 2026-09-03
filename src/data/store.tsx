@@ -2,29 +2,57 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
-import { createSeedData } from "./seed";
+import {
+  fetchAccountCloud,
+  pushAccountCloud,
+  type CloudFetch,
+  type SyncStatus,
+} from "./accountSync";
 import { deleteStoredFile } from "./fileStore";
+import {
+  accountFingerprint,
+  composeAppData,
+  emptyAccount,
+  extractAccount,
+  loadAppData,
+  saveAccountLocal,
+  saveCapturesLocal,
+} from "./personal";
 import { scheduleAfterReview } from "./srs";
 import type {
   Acronym,
   AppData,
   AssessmentItem,
+  AttendanceMark,
+  AttendanceRecord,
+  BehaviourLog,
   CaptureItem,
+  CommsLog,
+  ContactEntry,
   GlossaryEntry,
+  GoalItem,
+  GradeEntry,
+  HomeworkItem,
+  LessonPlan,
+  PdEntry,
   PlannerEvent,
+  ProjectItem,
   ReminderPin,
   ResourceLink,
-  SrsCardProgress,
+  School,
+  SchoolTodo,
   SrsRating,
+  Student,
+  SupplyItem,
   TaskItem,
+  TimetableSlot,
 } from "./types";
-
-const LEGACY_STORAGE_KEY = "qts-planner-data";
-const PERSONAL_PREFIX = "qts-planner-personal:";
 
 export function uid(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -34,252 +62,13 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-/** Per-account only — todos, remember pins, captures, SRS progress, personal notes */
-type PersonalData = {
-  version: number;
-  tasks: TaskItem[];
-  reminders: ReminderPin[];
-  captures: CaptureItem[];
-  srs: Record<string, SrsCardProgress>;
-  glossaryNotes: Record<string, string>;
-  acronymNotes: Record<string, string>;
-  assessmentDone: Record<string, boolean>;
-  assessmentNotes: Record<string, string>;
-  resourceNotes: Record<string, string>;
-  /** User-added items (not in shared programme seed) */
-  customGlossary: GlossaryEntry[];
-  customAcronyms: Acronym[];
-  customEvents: PlannerEvent[];
-  customAssessments: AssessmentItem[];
-  customResources: ResourceLink[];
-};
-
-function emptyPersonal(): PersonalData {
-  const seed = createSeedData();
-  return {
-    version: 1,
-    tasks: seed.tasks.map((t) => ({ ...t, notes: t.notes ?? "" })),
-    reminders: [...seed.reminders],
-    captures: [],
-    srs: {},
-    glossaryNotes: {},
-    acronymNotes: {},
-    assessmentDone: {},
-    assessmentNotes: {},
-    resourceNotes: {},
-    customGlossary: [],
-    customAcronyms: [],
-    customEvents: [],
-    customAssessments: [],
-    customResources: [],
-  };
-}
-
-function personalFromFullDump(data: AppData): PersonalData {
-  const seed = createSeedData();
-  const seedGloss = new Set(seed.glossary.map((g) => g.id));
-  const seedAcr = new Set(seed.acronyms.map((a) => a.id));
-  const seedEvt = new Set(seed.events.map((e) => e.id));
-  const seedAssess = new Set(seed.assessments.map((a) => a.id));
-  const seedRes = new Set(seed.resources.map((r) => r.id));
-
-  const glossaryNotes: Record<string, string> = {};
-  for (const g of data.glossary ?? []) {
-    if (seedGloss.has(g.id) && g.notes?.trim()) glossaryNotes[g.id] = g.notes;
-  }
-  const acronymNotes: Record<string, string> = {};
-  for (const a of data.acronyms ?? []) {
-    if (seedAcr.has(a.id) && a.notes?.trim()) acronymNotes[a.id] = a.notes;
-  }
-  const assessmentDone: Record<string, boolean> = {};
-  const assessmentNotes: Record<string, string> = {};
-  for (const a of data.assessments ?? []) {
-    if (!seedAssess.has(a.id)) continue;
-    if (a.done) assessmentDone[a.id] = true;
-    if (a.notes?.trim()) assessmentNotes[a.id] = a.notes;
-  }
-  const resourceNotes: Record<string, string> = {};
-  for (const r of data.resources ?? []) {
-    if (seedRes.has(r.id) && r.notes?.trim()) resourceNotes[r.id] = r.notes;
-  }
-
-  return {
-    version: 1,
-    tasks: (data.tasks ?? []).map((t) => ({ ...t, notes: t.notes ?? "" })),
-    reminders: data.reminders ?? [],
-    captures: data.captures ?? [],
-    srs: data.srs ?? {},
-    glossaryNotes,
-    acronymNotes,
-    assessmentDone,
-    assessmentNotes,
-    resourceNotes,
-    customGlossary: (data.glossary ?? []).filter((g) => !seedGloss.has(g.id)),
-    customAcronyms: (data.acronyms ?? []).filter((a) => !seedAcr.has(a.id)),
-    customEvents: (data.events ?? []).filter((e) => !seedEvt.has(e.id)),
-    customAssessments: (data.assessments ?? []).filter(
-      (a) => !seedAssess.has(a.id),
-    ),
-    customResources: (data.resources ?? []).filter((r) => !seedRes.has(r.id)),
-  };
-}
-
-function scorePersonal(p: PersonalData): number {
-  return (
-    p.tasks.length +
-    p.reminders.length +
-    p.captures.length +
-    Object.keys(p.srs).length +
-    p.customGlossary.length
-  );
-}
-
-function parseMaybeFull(raw: string): PersonalData | null {
-  try {
-    const parsed = JSON.parse(raw) as AppData & Partial<PersonalData>;
-    // Already personal-shaped
-    if (parsed.version && Array.isArray(parsed.tasks) && parsed.captures) {
-      return {
-        ...emptyPersonal(),
-        ...parsed,
-        tasks: parsed.tasks ?? [],
-        reminders: parsed.reminders ?? [],
-        captures: parsed.captures ?? [],
-        srs: parsed.srs ?? {},
-        glossaryNotes: parsed.glossaryNotes ?? {},
-        acronymNotes: parsed.acronymNotes ?? {},
-        assessmentDone: parsed.assessmentDone ?? {},
-        assessmentNotes: parsed.assessmentNotes ?? {},
-        resourceNotes: parsed.resourceNotes ?? {},
-        customGlossary: parsed.customGlossary ?? [],
-        customAcronyms: parsed.customAcronyms ?? [],
-        customEvents: parsed.customEvents ?? [],
-        customAssessments: parsed.customAssessments ?? [],
-        customResources: parsed.customResources ?? [],
-      };
-    }
-    // Full app dump (legacy / old per-user blob)
-    if (parsed.seedVersion || parsed.glossary || parsed.events) {
-      return personalFromFullDump(parsed as AppData);
-    }
-  } catch {
-    /* ignore */
-  }
-  return null;
-}
-
-/** Recover the richest personal blob still on this device. */
-function recoverPersonal(userId: string): PersonalData {
-  const candidates: PersonalData[] = [];
-
-  const personalKey = `${PERSONAL_PREFIX}${userId}`;
-  const personalRaw = localStorage.getItem(personalKey);
-  if (personalRaw) {
-    const p = parseMaybeFull(personalRaw);
-    if (p) candidates.push(p);
-  }
-
-  const userFull = localStorage.getItem(`${LEGACY_STORAGE_KEY}:${userId}`);
-  if (userFull) {
-    const p = parseMaybeFull(userFull);
-    if (p) candidates.push(p);
-  }
-
-  const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
-  if (legacy) {
-    const p = parseMaybeFull(legacy);
-    if (p) candidates.push(p);
-  }
-
-  // Other accounts' dumps on this browser (e.g. old Google UUID) — reclaim richest
-  for (let i = 0; i < localStorage.length; i += 1) {
-    const k = localStorage.key(i);
-    if (!k) continue;
-    if (k === personalKey || k === LEGACY_STORAGE_KEY) continue;
-    if (
-      !k.startsWith(`${LEGACY_STORAGE_KEY}:`) &&
-      !k.startsWith(PERSONAL_PREFIX)
-    ) {
-      continue;
-    }
-    if (k.endsWith(`:${userId}`) || k === `${PERSONAL_PREFIX}${userId}`) continue;
-    const raw = localStorage.getItem(k);
-    if (!raw) continue;
-    const p = parseMaybeFull(raw);
-    if (p) candidates.push(p);
-  }
-
-  if (candidates.length === 0) return emptyPersonal();
-  candidates.sort((a, b) => scorePersonal(b) - scorePersonal(a));
-  return candidates[0]!;
-}
-
-function composeAppData(personal: PersonalData): AppData {
-  const shared = createSeedData();
-  return {
-    seedVersion: shared.seedVersion,
-    acronyms: [
-      ...shared.acronyms.map((a) => ({
-        ...a,
-        notes: personal.acronymNotes[a.id] ?? "",
-      })),
-      ...personal.customAcronyms,
-    ],
-    glossary: [
-      ...shared.glossary.map((g) => ({
-        ...g,
-        notes: personal.glossaryNotes[g.id] ?? "",
-      })),
-      ...personal.customGlossary,
-    ],
-    events: [...shared.events, ...personal.customEvents].sort(
-      (a, b) =>
-        a.date.localeCompare(b.date) || a.start.localeCompare(b.start),
-    ),
-    assessments: [
-      ...shared.assessments.map((a) => ({
-        ...a,
-        done: personal.assessmentDone[a.id] ?? false,
-        notes: personal.assessmentNotes[a.id] ?? "",
-      })),
-      ...personal.customAssessments,
-    ].sort((a, b) => a.date.localeCompare(b.date)),
-    tasks: personal.tasks,
-    resources: [
-      ...shared.resources.map((r) => ({
-        ...r,
-        notes: personal.resourceNotes[r.id] ?? "",
-      })),
-      ...personal.customResources,
-    ],
-    reminders: personal.reminders,
-    captures: personal.captures,
-    srs: personal.srs,
-  };
-}
-
-function extractPersonal(data: AppData): PersonalData {
-  return personalFromFullDump(data);
-}
-
-function savePersonal(userId: string, data: AppData) {
-  const personal = extractPersonal(data);
-  localStorage.setItem(
-    `${PERSONAL_PREFIX}${userId}`,
-    JSON.stringify(personal),
-  );
-}
-
-function loadAppData(userId: string): AppData {
-  const personal = recoverPersonal(userId);
-  const composed = composeAppData(personal);
-  // Persist recovered personal under this account so it sticks
-  savePersonal(userId, composed);
-  return composed;
-}
+const CLOUD_SAVE_MS = 700;
 
 type StoreApi = {
   data: AppData;
+  syncStatus: SyncStatus;
+  syncError: string | null;
+  retrySync: () => void;
   toggleTask: (id: string) => void;
   toggleAssessment: (id: string) => void;
   reviewCard: (cardId: string, rating: SrsRating) => void;
@@ -322,9 +111,46 @@ type StoreApi = {
   ) => string;
   updateCapture: (id: string, patchData: Partial<CaptureItem>) => void;
   resetSeed: () => void;
+  addSchool: (
+    input: Omit<School, "id" | "createdAt"> & { id?: string },
+  ) => string;
+  addStudent: (input: Omit<Student, "id">) => void;
+  addLesson: (input: Omit<LessonPlan, "id">) => void;
+  addTimetableSlot: (input: Omit<TimetableSlot, "id">) => void;
+  addHomework: (input: Omit<HomeworkItem, "id" | "done">) => void;
+  toggleHomework: (id: string) => void;
+  addComms: (input: Omit<CommsLog, "id">) => void;
+  addContact: (input: Omit<ContactEntry, "id">) => void;
+  addSchoolTodo: (input: Omit<SchoolTodo, "id" | "done">) => void;
+  toggleSchoolTodo: (id: string) => void;
+  addGoal: (input: Omit<GoalItem, "id" | "done">) => void;
+  addPd: (input: Omit<PdEntry, "id">) => void;
+  addSupply: (input: Omit<SupplyItem, "id">) => void;
+  addProject: (input: Omit<ProjectItem, "id">) => void;
+  addBehaviour: (input: Omit<BehaviourLog, "id">) => void;
+  addGrade: (input: Omit<GradeEntry, "id">) => void;
+  upsertAttendance: (input: {
+    schoolId: string;
+    studentId: string;
+    date: string;
+    mark: AttendanceMark;
+    notes?: string;
+  }) => void;
 };
 
 const StoreContext = createContext<StoreApi | null>(null);
+
+function applyFetchStatus(
+  result: CloudFetch,
+): { status: SyncStatus; error: string | null } {
+  if (result.kind === "missing-table") {
+    return { status: "setup", error: null };
+  }
+  if (result.kind === "error") {
+    return { status: "offline", error: result.message };
+  }
+  return { status: "synced", error: null };
+}
 
 export function DataProvider({
   userId,
@@ -333,18 +159,141 @@ export function DataProvider({
   userId: string;
   children: ReactNode;
 }) {
-  const [data, setData] = useState<AppData>(() => loadAppData(userId));
+  const initial = useMemo(() => loadAppData(userId), [userId]);
+  const [data, setData] = useState<AppData>(initial.data);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("syncing");
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  const dataRef = useRef(initial.data);
+  const updatedAtRef = useRef(initial.account.updatedAt);
+  const hydratingRef = useRef(true);
+  const dirtyAccountRef = useRef(false);
+  const syncStatusRef = useRef<SyncStatus>("syncing");
+  const saveTimerRef = useRef<number | null>(null);
+  dataRef.current = data;
+  syncStatusRef.current = syncStatus;
+
+  const persistLocal = useCallback(
+    (next: AppData, updatedAt: string) => {
+      saveAccountLocal(userId, extractAccount(next, updatedAt));
+      saveCapturesLocal(userId, next.captures);
+    },
+    [userId],
+  );
+
+  const pushCloudNow = useCallback(async () => {
+    if (syncStatusRef.current === "setup") return;
+    const account = extractAccount(dataRef.current, updatedAtRef.current);
+    setSyncStatus("syncing");
+    const result = await pushAccountCloud(userId, account);
+    const applied = applyFetchStatus(result);
+    setSyncStatus(applied.status);
+    setSyncError(applied.error);
+    if (result.kind === "ok") dirtyAccountRef.current = false;
+  }, [userId]);
+
+  const scheduleCloudPush = useCallback(() => {
+    if (hydratingRef.current) return;
+    if (syncStatusRef.current === "setup") return;
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = window.setTimeout(() => {
+      void pushCloudNow();
+    }, CLOUD_SAVE_MS);
+  }, [pushCloudNow]);
 
   const patch = useCallback(
     (updater: (prev: AppData) => AppData) => {
       setData((prev) => {
         const next = updater(prev);
-        savePersonal(userId, next);
+        persistLocal(next, updatedAtRef.current);
+        const changed =
+          accountFingerprint(extractAccount(prev, updatedAtRef.current)) !==
+          accountFingerprint(extractAccount(next, updatedAtRef.current));
+        if (changed) {
+          updatedAtRef.current = nowIso();
+          persistLocal(next, updatedAtRef.current);
+          dirtyAccountRef.current = true;
+          scheduleCloudPush();
+        }
         return next;
       });
     },
-    [userId],
+    [persistLocal, scheduleCloudPush],
   );
+
+  const hydrateFromCloud = useCallback(async () => {
+    hydratingRef.current = true;
+    setSyncStatus("syncing");
+    const result = await fetchAccountCloud(userId);
+    if (result.kind !== "ok") {
+      const applied = applyFetchStatus(result);
+      setSyncStatus(applied.status);
+      setSyncError(applied.error);
+      hydratingRef.current = false;
+      return;
+    }
+
+    if (dirtyAccountRef.current) {
+      hydratingRef.current = false;
+      await pushCloudNow();
+      return;
+    }
+
+    const cloud = result.payload;
+    const local = extractAccount(dataRef.current, updatedAtRef.current);
+    if (!cloud) {
+      if (local.updatedAt.startsWith("1970-")) {
+        updatedAtRef.current = nowIso();
+        persistLocal(dataRef.current, updatedAtRef.current);
+      }
+      hydratingRef.current = false;
+      await pushCloudNow();
+      return;
+    }
+
+    const cloudTime = Date.parse(cloud.updatedAt) || 0;
+    const localTime = Date.parse(local.updatedAt) || 0;
+    if (cloudTime > localTime) {
+      const next = composeAppData(cloud, dataRef.current.captures);
+      updatedAtRef.current = cloud.updatedAt;
+      persistLocal(next, cloud.updatedAt);
+      setData(next);
+      hydratingRef.current = false;
+      setSyncStatus("synced");
+      setSyncError(null);
+      return;
+    }
+
+    hydratingRef.current = false;
+    if (localTime > cloudTime) {
+      await pushCloudNow();
+      return;
+    }
+    setSyncStatus("synced");
+    setSyncError(null);
+  }, [persistLocal, pushCloudNow, userId]);
+
+  useEffect(() => {
+    void hydrateFromCloud();
+    const onFocus = () => {
+      if (hydratingRef.current) return;
+      if (dirtyAccountRef.current) {
+        void pushCloudNow();
+        return;
+      }
+      void hydrateFromCloud();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    };
+  }, [hydrateFromCloud, pushCloudNow]);
+
+  const retrySync = useCallback(() => {
+    dirtyAccountRef.current = true;
+    void hydrateFromCloud();
+  }, [hydrateFromCloud]);
 
   const toggleTask = useCallback(
     (id: string) => {
@@ -664,14 +613,234 @@ export function DataProvider({
   );
 
   const resetSeed = useCallback(() => {
-    const fresh = composeAppData(emptyPersonal());
-    savePersonal(userId, fresh);
-    setData(fresh);
-  }, [userId]);
+    const account = { ...emptyAccount(), updatedAt: nowIso() };
+    const next = composeAppData(account, dataRef.current.captures);
+    updatedAtRef.current = account.updatedAt;
+    persistLocal(next, account.updatedAt);
+    setData(next);
+    dirtyAccountRef.current = true;
+    scheduleCloudPush();
+  }, [persistLocal, scheduleCloudPush]);
+
+  const addSchool = useCallback(
+    (input: Omit<School, "id" | "createdAt"> & { id?: string }) => {
+      const id = input.id ?? uid("school");
+      const school: School = {
+        ...input,
+        id,
+        createdAt: nowIso(),
+      };
+      patch((prev) => ({ ...prev, schools: [...prev.schools, school] }));
+      return id;
+    },
+    [patch],
+  );
+
+  const addStudent = useCallback(
+    (input: Omit<Student, "id">) => {
+      patch((prev) => ({
+        ...prev,
+        students: [...prev.students, { ...input, id: uid("stu") }],
+      }));
+    },
+    [patch],
+  );
+
+  const addLesson = useCallback(
+    (input: Omit<LessonPlan, "id">) => {
+      patch((prev) => ({
+        ...prev,
+        lessons: [...prev.lessons, { ...input, id: uid("lesson") }],
+      }));
+    },
+    [patch],
+  );
+
+  const addTimetableSlot = useCallback(
+    (input: Omit<TimetableSlot, "id">) => {
+      patch((prev) => ({
+        ...prev,
+        timetable: [...prev.timetable, { ...input, id: uid("tt") }],
+      }));
+    },
+    [patch],
+  );
+
+  const addHomework = useCallback(
+    (input: Omit<HomeworkItem, "id" | "done">) => {
+      patch((prev) => ({
+        ...prev,
+        homework: [
+          { ...input, id: uid("hw"), done: false },
+          ...prev.homework,
+        ],
+      }));
+    },
+    [patch],
+  );
+
+  const toggleHomework = useCallback(
+    (id: string) => {
+      patch((prev) => ({
+        ...prev,
+        homework: prev.homework.map((h) =>
+          h.id === id ? { ...h, done: !h.done } : h,
+        ),
+      }));
+    },
+    [patch],
+  );
+
+  const addComms = useCallback(
+    (input: Omit<CommsLog, "id">) => {
+      patch((prev) => ({
+        ...prev,
+        comms: [{ ...input, id: uid("comms") }, ...prev.comms],
+      }));
+    },
+    [patch],
+  );
+
+  const addContact = useCallback(
+    (input: Omit<ContactEntry, "id">) => {
+      patch((prev) => ({
+        ...prev,
+        contacts: [...prev.contacts, { ...input, id: uid("contact") }],
+      }));
+    },
+    [patch],
+  );
+
+  const addSchoolTodo = useCallback(
+    (input: Omit<SchoolTodo, "id" | "done">) => {
+      patch((prev) => ({
+        ...prev,
+        schoolTodos: [
+          { ...input, id: uid("stodo"), done: false },
+          ...prev.schoolTodos,
+        ],
+      }));
+    },
+    [patch],
+  );
+
+  const toggleSchoolTodo = useCallback(
+    (id: string) => {
+      patch((prev) => ({
+        ...prev,
+        schoolTodos: prev.schoolTodos.map((t) =>
+          t.id === id ? { ...t, done: !t.done } : t,
+        ),
+      }));
+    },
+    [patch],
+  );
+
+  const addGoal = useCallback(
+    (input: Omit<GoalItem, "id" | "done">) => {
+      patch((prev) => ({
+        ...prev,
+        goals: [{ ...input, id: uid("goal"), done: false }, ...prev.goals],
+      }));
+    },
+    [patch],
+  );
+
+  const addPd = useCallback(
+    (input: Omit<PdEntry, "id">) => {
+      patch((prev) => ({
+        ...prev,
+        pd: [{ ...input, id: uid("pd") }, ...prev.pd],
+      }));
+    },
+    [patch],
+  );
+
+  const addSupply = useCallback(
+    (input: Omit<SupplyItem, "id">) => {
+      patch((prev) => ({
+        ...prev,
+        supplies: [...prev.supplies, { ...input, id: uid("supply") }],
+      }));
+    },
+    [patch],
+  );
+
+  const addProject = useCallback(
+    (input: Omit<ProjectItem, "id">) => {
+      patch((prev) => ({
+        ...prev,
+        projects: [...prev.projects, { ...input, id: uid("proj") }],
+      }));
+    },
+    [patch],
+  );
+
+  const addBehaviour = useCallback(
+    (input: Omit<BehaviourLog, "id">) => {
+      patch((prev) => ({
+        ...prev,
+        behaviour: [{ ...input, id: uid("beh") }, ...prev.behaviour],
+      }));
+    },
+    [patch],
+  );
+
+  const addGrade = useCallback(
+    (input: Omit<GradeEntry, "id">) => {
+      patch((prev) => ({
+        ...prev,
+        grades: [{ ...input, id: uid("grade") }, ...prev.grades],
+      }));
+    },
+    [patch],
+  );
+
+  const upsertAttendance = useCallback(
+    (input: {
+      schoolId: string;
+      studentId: string;
+      date: string;
+      mark: AttendanceMark;
+      notes?: string;
+    }) => {
+      patch((prev) => {
+        const existing = prev.attendance.find(
+          (a) =>
+            a.schoolId === input.schoolId &&
+            a.studentId === input.studentId &&
+            a.date === input.date,
+        );
+        if (existing) {
+          return {
+            ...prev,
+            attendance: prev.attendance.map((a) =>
+              a.id === existing.id
+                ? { ...a, mark: input.mark, notes: input.notes }
+                : a,
+            ),
+          };
+        }
+        const row: AttendanceRecord = {
+          id: uid("att"),
+          schoolId: input.schoolId,
+          studentId: input.studentId,
+          date: input.date,
+          mark: input.mark,
+          notes: input.notes,
+        };
+        return { ...prev, attendance: [...prev.attendance, row] };
+      });
+    },
+    [patch],
+  );
 
   const value = useMemo(
     () => ({
       data,
+      syncStatus,
+      syncError,
+      retrySync,
       toggleTask,
       toggleAssessment,
       reviewCard,
@@ -695,9 +864,29 @@ export function DataProvider({
       addCapture,
       updateCapture,
       resetSeed,
+      addSchool,
+      addStudent,
+      addLesson,
+      addTimetableSlot,
+      addHomework,
+      toggleHomework,
+      addComms,
+      addContact,
+      addSchoolTodo,
+      toggleSchoolTodo,
+      addGoal,
+      addPd,
+      addSupply,
+      addProject,
+      addBehaviour,
+      addGrade,
+      upsertAttendance,
     }),
     [
       data,
+      syncStatus,
+      syncError,
+      retrySync,
       toggleTask,
       toggleAssessment,
       reviewCard,
@@ -721,6 +910,23 @@ export function DataProvider({
       addCapture,
       updateCapture,
       resetSeed,
+      addSchool,
+      addStudent,
+      addLesson,
+      addTimetableSlot,
+      addHomework,
+      toggleHomework,
+      addComms,
+      addContact,
+      addSchoolTodo,
+      toggleSchoolTodo,
+      addGoal,
+      addPd,
+      addSupply,
+      addProject,
+      addBehaviour,
+      addGrade,
+      upsertAttendance,
     ],
   );
 
@@ -736,3 +942,4 @@ export function useStore() {
 }
 
 export { todayISO, formatShortDate, formatDayHeading, addDays } from "./dates";
+export type { SyncStatus } from "./accountSync";

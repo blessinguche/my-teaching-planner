@@ -76,10 +76,10 @@ export function DashboardPage() {
           <p className="subtitle">What do I need to do?</p>
         </div>
         <div className="page-actions">
-          <Link to="/todos" className="btn btn-primary btn-clay">
+          <Link to="/qts/todos" className="btn btn-primary btn-clay">
             All to-dos
           </Link>
-          <Link to="/deadlines" className="btn btn-peach btn-clay">
+          <Link to="/qts/deadlines" className="btn btn-peach btn-clay">
             Deadlines
           </Link>
         </div>
@@ -110,7 +110,7 @@ export function DashboardPage() {
           <div className="learn-badge">{dueReviews}</div>
           <p className="muted">cards due for recall</p>
           <Link
-            to="/practice"
+            to="/qts/practice"
             className="btn btn-primary btn-clay"
             style={{ marginTop: "0.85rem" }}
           >
@@ -124,7 +124,7 @@ export function DashboardPage() {
             <h2 className="panel-title" style={{ marginBottom: 0 }}>
               Today
             </h2>
-            <Link to="/planner" className="hint">
+            <Link to="/cal" className="hint">
               Calendar →
             </Link>
           </div>
@@ -167,7 +167,7 @@ export function DashboardPage() {
             <h2 className="panel-title" style={{ marginBottom: 0 }}>
               Do
             </h2>
-            <Link to="/todos" className="hint">
+            <Link to="/qts/todos" className="hint">
               See all ({openTaskCount}) →
             </Link>
           </div>
@@ -209,8 +209,8 @@ export function DashboardPage() {
             <h2 className="panel-title" style={{ marginBottom: 0 }}>
               Coming up
             </h2>
-            <Link to="/planner" className="hint">
-              Planner →
+            <Link to="/cal" className="hint">
+              Calendar →
             </Link>
           </div>
           {upcoming.length === 0 ? (
@@ -258,7 +258,7 @@ export function DashboardPage() {
             <h2 className="panel-title" style={{ marginBottom: 0 }}>
               Assessments
             </h2>
-            <Link to="/deadlines" className="hint">
+            <Link to="/qts/deadlines" className="hint">
               See all →
             </Link>
           </div>

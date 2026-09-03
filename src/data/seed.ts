@@ -1,9 +1,13 @@
 import type { AppData } from "./types";
 import { KEY_ASSESSMENTS, PROGRAMME_EVENTS } from "./programmeCalendar";
 import { HOLIDAY_BREAKS } from "./breaks";
+import {
+  createClaytonHallSchool,
+  emptySchoolCollections,
+} from "./schools";
 
-/** Seed v4 — handout todos, Ormiston breaks, calendar-ready */
-export const SEED_VERSION = 4;
+/** Seed v5 — schools + Clayton Hall term/day structure */
+export const SEED_VERSION = 5;
 
 const acronyms: AppData["acronyms"] = [
   { id: "afl", acronym: "AFL", meaning: "Assessment For Learning" },
@@ -501,6 +505,7 @@ const reminders: AppData["reminders"] = [
 ];
 
 export function createSeedData(): AppData {
+  const schoolBits = emptySchoolCollections();
   return {
     seedVersion: SEED_VERSION,
     acronyms,
@@ -512,5 +517,7 @@ export function createSeedData(): AppData {
     reminders,
     captures: [],
     srs: {},
+    schools: [createClaytonHallSchool()],
+    ...schoolBits,
   };
 }

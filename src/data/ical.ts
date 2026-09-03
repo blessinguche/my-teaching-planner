@@ -42,12 +42,12 @@ export function buildIcs(options: {
   assessments: AssessmentItem[];
   calendarName?: string;
 }) {
-  const name = options.calendarName ?? "QTS Planner";
+  const name = options.calendarName ?? "Teaching Planner";
   const now = stamp();
   const lines: string[] = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//QTS Planner//EN",
+    "PRODID:-//Teaching Planner//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     `X-WR-CALNAME:${icsEscape(name)}`,
@@ -60,7 +60,7 @@ export function buildIcs(options: {
       (ev.kind === "deadline" && ev.start === "23:59");
     const endDate = ev.endDate ?? ev.date;
     lines.push("BEGIN:VEVENT");
-    lines.push(`UID:${ev.id}@qts-planner.local`);
+    lines.push(`UID:${ev.id}@teaching-planner.local`);
     lines.push(`DTSTAMP:${now}`);
     if (isAllDay || ev.kind === "deadline") {
       lines.push(`DTSTART;VALUE=DATE:${toIcalDay(ev.date)}`);
@@ -83,7 +83,7 @@ export function buildIcs(options: {
     if (a.done) continue;
     const end = a.endDate ?? a.date;
     lines.push("BEGIN:VEVENT");
-    lines.push(`UID:${a.id}@qts-planner.local`);
+    lines.push(`UID:${a.id}@teaching-planner.local`);
     lines.push(`DTSTAMP:${now}`);
     lines.push(`DTSTART;VALUE=DATE:${toIcalDay(a.date)}`);
     lines.push(`DTEND;VALUE=DATE:${toIcalDay(addOneDay(end))}`);
