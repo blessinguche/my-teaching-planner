@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { NoteEditor, StudentPicker } from "./NoteEditor";
 
 type Field =
   | {
@@ -34,6 +35,17 @@ type Field =
       type: "file";
       required?: boolean;
       accept?: string;
+      hint?: string;
+    }
+  | {
+      name: string;
+      label: string;
+      type: "student";
+      students: { id: string; name: string; yearGroup?: string; form?: string }[];
+      allowNone?: boolean;
+      noneLabel?: string;
+      required?: boolean;
+      defaultValue?: string;
       hint?: string;
     };
 
@@ -103,6 +115,10 @@ export function AddDialog({
     e.preventDefault();
     if (busy) return;
     const form = e.currentTarget;
+    // Flush rich editors before reading FormData
+    form.querySelectorAll<HTMLElement>(".note-surface").forEach((surface) => {
+      surface.dispatchEvent(new Event("blur", { bubbles: true }));
+    });
     const fd = new FormData(form);
     const values: Record<string, string> = {};
     const files: Record<string, File | null> = {};
@@ -170,12 +186,21 @@ export function AddDialog({
                 {field.required ? " *" : ""}
               </span>
               {field.type === "textarea" ? (
-                <textarea
+                <NoteEditor
                   name={field.name}
                   required={field.required}
                   placeholder={field.placeholder}
                   defaultValue={field.defaultValue}
-                  rows={4}
+                  disabled={busy}
+                />
+              ) : field.type === "student" ? (
+                <StudentPicker
+                  name={field.name}
+                  students={field.students}
+                  allowNone={field.allowNone}
+                  noneLabel={field.noneLabel}
+                  required={field.required}
+                  defaultValue={field.defaultValue}
                   disabled={busy}
                 />
               ) : field.type === "select" ? (

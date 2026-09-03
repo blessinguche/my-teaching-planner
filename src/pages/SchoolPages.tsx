@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import { AddButton, AddDialog, PageHeader } from "../components/AddDialog";
+import { NoteHtmlLive, SearchField } from "../components/NoteEditor";
 import { todayISO } from "../data/dates";
 import { formatShortDate, useStore } from "../data/store";
 import type { AttendanceMark, School } from "../data/types";
@@ -26,21 +27,21 @@ export function SchoolHomePage() {
     .sort((a, b) => a.start.localeCompare(b.start))[0];
 
   const shortcuts = [
-    ["Terms & holidays", `${base}/terms`],
-    ["Day times / timetable", `${base}/timetable`],
     ["Lesson plans", `${base}/lessons`],
+    ["Day times / timetable", `${base}/timetable`],
     ["Class roster", `${base}/roster`],
     ["Attendance", `${base}/attendance`],
-    ["Grades", `${base}/grades`],
     ["Behaviour", `${base}/behaviour`],
     ["Homework", `${base}/homework`],
+    ["To-dos", `${base}/todos`],
+    ["Grades", `${base}/grades`],
     ["Parent comms", `${base}/comms`],
     ["Contacts", `${base}/contacts`],
-    ["To-dos", `${base}/todos`],
     ["Goals", `${base}/goals`],
+    ["Terms & holidays", `${base}/terms`],
+    ["Projects", `${base}/projects`],
     ["Professional development", `${base}/pd`],
     ["Supplies", `${base}/supplies`],
-    ["Projects", `${base}/projects`],
     ["Birthdays & dates", `${base}/birthdays`],
   ] as const;
 
@@ -290,9 +291,15 @@ export function SchoolRosterPage() {
   const school = useSchool();
   const { data, addStudent } = useStore();
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
   const students = data.students
     .filter((s) => s.schoolId === school.id)
     .sort((a, b) => a.name.localeCompare(b.name));
+  const filtered = students.filter((s) => {
+    const hay = `${s.name} ${s.yearGroup ?? ""} ${s.form ?? ""} ${s.parentContact ?? ""} ${s.notes ?? ""}`
+      .toLowerCase();
+    return hay.includes(q.trim().toLowerCase());
+  });
 
   return (
     <div className="module-page page-enter">
@@ -302,16 +309,22 @@ export function SchoolRosterPage() {
         blurb="Students, forms, and parent contact notes."
         actions={<AddButton label="Student" onClick={() => setOpen(true)} />}
       />
+      <SearchField
+        value={q}
+        onChange={setQ}
+        placeholder="Search name, year, form…"
+      />
       <ListOrEmpty
-        empty="No students yet."
-        items={students.map((s) => (
+        empty={students.length === 0 ? "No students yet." : "No matches."}
+        items={filtered.map((s) => (
           <li key={s.id} className="upcoming-item">
             <span className="time-pill">{s.yearGroup || "—"}</span>
             <div>
               <strong>{s.name}</strong>
               <p className="hint">
-                {[s.form, s.parentContact, s.notes].filter(Boolean).join(" · ")}
+                {[s.form, s.parentContact].filter(Boolean).join(" · ")}
               </p>
+              <NoteHtmlLive html={s.notes} clamp className="hint" />
             </div>
           </li>
         ))}
@@ -411,7 +424,9 @@ export function SchoolGradesPage() {
   const school = useSchool();
   const { data, addGrade } = useStore();
   const [open, setOpen] = useState(false);
-  const students = data.students.filter((s) => s.schoolId === school.id);
+  const students = data.students
+    .filter((s) => s.schoolId === school.id)
+    .sort((a, b) => a.name.localeCompare(b.name));
   const grades = data.grades
     .filter((g) => g.schoolId === school.id)
     .sort((a, b) => b.date.localeCompare(a.date));
@@ -434,9 +449,8 @@ export function SchoolGradesPage() {
               <strong>
                 {student?.name ?? "Student"} · {g.title}
               </strong>
-              <p className="hint">
-                {[g.score, g.notes].filter(Boolean).join(" · ")}
-              </p>
+              {g.score ? <p className="hint">{g.score}</p> : null}
+              <NoteHtmlLive html={g.notes} clamp className="hint" />
             </div>
           </li>
         );
@@ -445,8 +459,9 @@ export function SchoolGradesPage() {
         {
           name: "studentId",
           label: "Student",
-          type: "select",
-          options: students.map((s) => ({ value: s.id, label: s.name })),
+          type: "student",
+          students,
+          required: true,
         },
         { name: "title", label: "Assessment", required: true },
         { name: "score", label: "Score / grade" },
@@ -471,63 +486,114 @@ export function SchoolBehaviourPage() {
   const school = useSchool();
   const { data, addBehaviour } = useStore();
   const [open, setOpen] = useState(false);
-  const students = data.students.filter((s) => s.schoolId === school.id);
+  const [filterStudent, setFilterStudent] = useState("all");
+  const [q, setQ] = useState("");
+  const students = data.students
+    .filter((s) => s.schoolId === school.id)
+    .sort((a, b) => a.name.localeCompare(b.name));
   const rows = data.behaviour
     .filter((b) => b.schoolId === school.id)
+    .filter((b) => {
+      if (filterStudent === "all") return true;
+      if (filterStudent === "none") return !b.studentId;
+      return b.studentId === filterStudent;
+    })
+    .filter((b) => {
+      const student = students.find((s) => s.id === b.studentId);
+      const hay = `${b.title} ${b.detail ?? ""} ${b.intervention ?? ""} ${student?.name ?? ""}`
+        .toLowerCase();
+      return hay.includes(q.trim().toLowerCase());
+    })
     .sort((a, b) => b.date.localeCompare(a.date));
 
   return (
-    <SimpleAddList
-      school={school}
-      title="Behaviour log"
-      blurb="Incidents, praise, and interventions."
-      empty="No behaviour notes yet."
-      addLabel="Entry"
-      open={open}
-      setOpen={setOpen}
-      items={rows.map((b) => {
-        const student = students.find((s) => s.id === b.studentId);
-        return (
-          <li key={b.id} className="upcoming-item">
-            <span className="time-pill">{formatShortDate(b.date)}</span>
-            <div>
-              <strong>
-                {b.title}
-                {student ? ` · ${student.name}` : ""}
-              </strong>
-              <p className="hint">
-                {[b.detail, b.intervention].filter(Boolean).join(" · ")}
-              </p>
-            </div>
-          </li>
-        );
-      })}
-      fields={[
-        {
-          name: "studentId",
-          label: "Student (optional)",
-          type: "select",
-          options: [
-            { value: "", label: "Whole class / none" },
-            ...students.map((s) => ({ value: s.id, label: s.name })),
-          ],
-        },
-        { name: "title", label: "Title", required: true },
-        { name: "date", label: "Date", type: "date", required: true, defaultValue: todayISO() },
-        { name: "detail", label: "Detail", type: "textarea" },
-        { name: "intervention", label: "Intervention", type: "textarea" },
-      ]}
-      onSubmit={(v) =>
-        addBehaviour({
-          schoolId: school.id,
-          studentId: v.studentId || undefined,
-          title: v.title,
-          date: v.date,
-          detail: v.detail || undefined,
-          intervention: v.intervention || undefined,
-        })
-      }
-    />
+    <div className="module-page page-enter">
+      <PageHeader
+        eyebrow={school.shortName}
+        title="Behaviour log"
+        blurb="Incidents, praise, and interventions."
+        actions={<AddButton label="Entry" onClick={() => setOpen(true)} />}
+      />
+      <div className="toolbar-row" style={{ marginBottom: "0.75rem" }}>
+        <SearchField
+          value={q}
+          onChange={setQ}
+          placeholder="Search log…"
+        />
+        <label className="field" style={{ minWidth: 180, margin: 0 }}>
+          <span className="visually-hidden">Filter student</span>
+          <select
+            value={filterStudent}
+            onChange={(e) => setFilterStudent(e.target.value)}
+          >
+            <option value="all">All students</option>
+            <option value="none">Whole class / none</option>
+            {students.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <ListOrEmpty
+        empty={
+          data.behaviour.some((b) => b.schoolId === school.id)
+            ? "No matches for this filter."
+            : "No behaviour notes yet."
+        }
+        items={rows.map((b) => {
+          const student = students.find((s) => s.id === b.studentId);
+          return (
+            <li key={b.id} className="upcoming-item">
+              <span className="time-pill">{formatShortDate(b.date)}</span>
+              <div>
+                <strong>
+                  {b.title}
+                  {student ? ` · ${student.name}` : ""}
+                </strong>
+                <NoteHtmlLive html={b.detail} clamp className="hint" />
+                <NoteHtmlLive html={b.intervention} clamp className="hint" />
+              </div>
+            </li>
+          );
+        })}
+      />
+      <AddDialog
+        open={open}
+        title="Add behaviour entry"
+        fields={[
+          {
+            name: "studentId",
+            label: "Student (optional)",
+            type: "student",
+            students,
+            allowNone: true,
+          },
+          { name: "title", label: "Title", required: true },
+          {
+            name: "date",
+            label: "Date",
+            type: "date",
+            required: true,
+            defaultValue: todayISO(),
+          },
+          { name: "detail", label: "Detail", type: "textarea" },
+          { name: "intervention", label: "Intervention", type: "textarea" },
+        ]}
+        onClose={() => setOpen(false)}
+        onSubmit={(v) =>
+          addBehaviour({
+            schoolId: school.id,
+            studentId: v.studentId || undefined,
+            title: v.title,
+            date: v.date,
+            detail: v.detail || undefined,
+            intervention: v.intervention || undefined,
+          })
+        }
+      />
+    </div>
   );
 }
 
