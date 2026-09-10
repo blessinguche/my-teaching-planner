@@ -165,7 +165,12 @@ export function SideNav() {
           </span>
         </button>
         <div className="mobile-brand">QTS Planner</div>
-        <span className="mobile-topbar-spacer" aria-hidden />
+        <NavLink to="/" className="mobile-home-btn" aria-label="Home" title="Home" end>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M3 11.5 12 4l9 7.5" />
+            <path d="M6 10.5V20h12v-9.5" />
+          </svg>
+        </NavLink>
       </header>
 
       {open ? (

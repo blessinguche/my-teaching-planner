@@ -78,14 +78,14 @@ export function KnowledgePage() {
         <div className="tab-row" role="tablist">
           <button
             type="button"
-            className={`btn${tab === "glossary" ? " btn-primary btn-clay" : ""}`}
+            className={`btn${tab === "glossary" ? " is-active-soft" : ""}`}
             onClick={() => setTab("glossary")}
           >
             Glossary ({data.glossary.length})
           </button>
           <button
             type="button"
-            className={`btn${tab === "acronyms" ? " btn-primary btn-clay" : ""}`}
+            className={`btn${tab === "acronyms" ? " is-active-soft" : ""}`}
             onClick={() => setTab("acronyms")}
           >
             Acronyms ({data.acronyms.length})

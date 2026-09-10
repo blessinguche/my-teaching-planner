@@ -1,4 +1,5 @@
 import { Outlet } from "react-router-dom";
+import { AreaTopBar } from "../PlannerUI";
 import { SyncBanner } from "../SyncBanner";
 import { SideNavFrame, icons, type NavItem } from "./SideNavFrame";
 
@@ -15,16 +16,19 @@ const qtsLinks: NavItem[] = [
 
 export function QtsShell() {
   return (
-    <div className="app-shell">
+    <div className="app-shell qts-area">
       <SideNavFrame
         brand="QTS"
         brandTitle="QTS training"
         mobileTitle="QTS training"
         links={qtsLinks}
         ariaLabel="QTS"
+        homeTo="/qts"
+        homeLabel="QTS home"
       />
       <main className="main-stage">
         <SyncBanner />
+        <AreaTopBar backTo="/" backLabel="Hub" title="QTS" />
         <Outlet />
       </main>
     </div>

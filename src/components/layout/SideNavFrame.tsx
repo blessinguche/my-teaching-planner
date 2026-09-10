@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 
 export type NavItem = {
   to: string;
@@ -14,6 +14,9 @@ type Props = {
   mobileTitle: string;
   links: NavItem[];
   ariaLabel?: string;
+  /** Mobile top-bar home shortcut (right of title). */
+  homeTo?: string;
+  homeLabel?: string;
 };
 
 function NavItems({
@@ -48,6 +51,8 @@ export function SideNavFrame({
   mobileTitle,
   links,
   ariaLabel = "Primary",
+  homeTo,
+  homeLabel = "Home",
 }: Props) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
@@ -95,7 +100,18 @@ export function SideNavFrame({
           </span>
         </button>
         <div className="mobile-brand">{mobileTitle}</div>
-        <span className="mobile-topbar-spacer" aria-hidden />
+        {homeTo ? (
+          <Link
+            to={homeTo}
+            className="mobile-home-btn"
+            aria-label={homeLabel}
+            title={homeLabel}
+          >
+            {icons.home}
+          </Link>
+        ) : (
+          <span className="mobile-topbar-spacer" aria-hidden />
+        )}
       </header>
 
       {open ? (

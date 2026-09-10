@@ -15,23 +15,14 @@ export function SchoolShell() {
   const base = `/school/${schoolId}`;
   const links: NavItem[] = [
     { to: base, label: "Home", end: true, icon: icons.home },
-    { to: `${base}/lessons`, label: "Lessons", icon: icons.lesson },
     { to: `${base}/timetable`, label: "Times", icon: icons.timetable },
-    { to: `${base}/roster`, label: "Roster", icon: icons.people },
-    { to: `${base}/attendance`, label: "Attend", icon: icons.attend },
-    { to: `${base}/behaviour`, label: "Behav", icon: icons.behaviour },
-    { to: `${base}/homework`, label: "HW", icon: icons.homework },
-    { to: `${base}/todos`, label: "To-do", icon: icons.todo },
-    { to: `${base}/grades`, label: "Grades", icon: icons.grades },
-    { to: `${base}/comms`, label: "Comms", icon: icons.comms },
-    { to: `${base}/contacts`, label: "Contacts", icon: icons.people },
-    { to: `${base}/goals`, label: "Goals", icon: icons.goals },
-    { to: `${base}/terms`, label: "Terms", icon: icons.terms },
-    { to: `${base}/projects`, label: "Projects", icon: icons.project },
-    { to: `${base}/pd`, label: "PD", icon: icons.pd },
-    { to: `${base}/supplies`, label: "Stock", icon: icons.supplies },
-    { to: `${base}/birthdays`, label: "Dates", icon: icons.cake },
-    { to: "/schools", label: "Schools", icon: icons.back },
+    { to: `${base}/notes`, label: "Notes", icon: icons.comms },
+    { to: `${base}/focus`, label: "Focus", icon: icons.qts },
+    { to: `${base}/calendar`, label: "Cal", icon: icons.cal },
+    { to: `${base}/planning`, label: "Plan", icon: icons.lesson },
+    { to: `${base}/training`, label: "Training", icon: icons.goals },
+    { to: `${base}/records`, label: "Records", icon: icons.grades },
+    { to: "/", label: "Hub", icon: icons.back },
   ];
 
   return (
@@ -42,6 +33,8 @@ export function SchoolShell() {
         mobileTitle={school.shortName}
         links={links}
         ariaLabel={`${school.shortName} school`}
+        homeTo={base}
+        homeLabel={`${school.shortName} home`}
       />
       <main className="main-stage">
         <SyncBanner />

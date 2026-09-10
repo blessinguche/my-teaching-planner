@@ -88,9 +88,9 @@ export function DeadlinesPage() {
                     (e) => e.kind === "deadline" || e.isAssessment,
                   ),
                   assessments: data.assessments,
-                  calendarName: "Teaching Planner Deadlines",
+                  calendarName: "QTS Deadlines",
                 });
-                downloadIcs("teaching-planner-deadlines.ics", ics);
+                downloadIcs("qts-deadlines.ics", ics);
               }}
             >
               Export .ics
@@ -158,7 +158,7 @@ export function DeadlinesPage() {
           <button
             key={id}
             type="button"
-            className={`btn${filter === id ? " btn-primary btn-clay" : ""}`}
+            className={`btn${filter === id ? " is-active-soft" : ""}`}
             onClick={() => setFilter(id)}
           >
             {label}

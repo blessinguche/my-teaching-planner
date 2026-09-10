@@ -15,7 +15,18 @@
   --peach-soft: #fdeCE8;
   --sky: #4f9db3;
   --butter: #f0d89a;
+  --lilac: #8b7bb8;
+  --lilac-soft: #eee8f8;
   --danger: #b5453a;
+
+  /* Physical planner accents */
+  --planner-teal: #7ab9b6;
+  --planner-teal-deep: #4f8f8c;
+  --planner-teal-soft: #d8ecea;
+  --planner-paper: #ffffff;
+  --planner-line: #d9e0de;
+  --planner-banner: #f3c98b;
+  --planner-label: #4a7070;
 
   --shadow-soft: 0 1px 2px rgba(26, 43, 38, 0.06);
   --shadow-md: 0 8px 24px rgba(26, 43, 38, 0.08);
@@ -30,6 +41,7 @@
 
   --font-display: "Fredoka", system-ui, sans-serif;
   --font-body: "Nunito", system-ui, sans-serif;
+  --font-write: "Short Stack", "Fredoka", cursive, system-ui, sans-serif;
 
   --radius-sm: 10px;
   --radius-md: 14px;
@@ -48,7 +60,11 @@
 html,
 body,
 #root {
-  min-height: 100%;
+  height: 100%;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body {
@@ -59,6 +75,13 @@ body {
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   line-height: 1.45;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+#root {
+  isolation: isolate;
 }
 
 h1,

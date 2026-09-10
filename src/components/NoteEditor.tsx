@@ -1,5 +1,9 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { getFileRecord, putFile } from "../data/fileStore";
+import {
+  deleteStoredFile,
+  getFileRecord,
+  putFile,
+} from "../data/fileStore";
 import { speechSupported, startLiveTranscript } from "../data/speech";
 
 type Props = {
@@ -9,6 +13,9 @@ type Props = {
   required?: boolean;
   disabled?: boolean;
   minHeight?: number;
+  /** When set, editor reports HTML on every change (in-page autosave). */
+  onChange?: (html: string) => void;
+  className?: string;
 };
 
 function exec(cmd: string, value?: string) {
@@ -99,6 +106,107 @@ export function sanitizeNoteHtml(html: string): string {
   return doc.body.innerHTML.trim();
 }
 
+const TRASH_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
+
+/** Turn a stored audio chip into a playable row (optional remove control). */
+async function hydrateAudioChip(
+  chip: HTMLElement,
+  urls: string[],
+  removable: boolean,
+  onChanged?: () => void,
+) {
+  const id = chip.dataset.audioId;
+  if (!id || chip.dataset.hydrated === "1") return;
+  chip.dataset.hydrated = "1";
+  chip.contentEditable = "false";
+  chip.className = "note-audio-chip";
+
+  const rec = await getFileRecord(id);
+  if (!rec || !chip.isConnected) {
+    chip.dataset.hydrated = "0";
+    chip.textContent = "Voice note (missing)";
+    return;
+  }
+
+  const url = URL.createObjectURL(rec.blob);
+  urls.push(url);
+
+  chip.replaceChildren();
+
+  const play = document.createElement("button");
+  play.type = "button";
+  play.className = "note-audio-play";
+  play.setAttribute("aria-label", "Play voice note");
+  play.textContent = "▶";
+
+  const body = document.createElement("div");
+  body.className = "note-audio-body";
+
+  const label = document.createElement("span");
+  label.className = "note-audio-label";
+  label.textContent = "Voice note";
+
+  const audio = document.createElement("audio");
+  audio.preload = "metadata";
+  audio.src = url;
+  audio.controls = true;
+
+  body.append(label, audio);
+
+  play.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (audio.paused) {
+      void audio.play();
+    } else {
+      audio.pause();
+    }
+  });
+  audio.addEventListener("ended", () => {
+    play.textContent = "▶";
+    play.setAttribute("aria-label", "Play voice note");
+  });
+  audio.addEventListener("pause", () => {
+    if (audio.ended) return;
+    play.textContent = "▶";
+    play.setAttribute("aria-label", "Play voice note");
+  });
+  audio.addEventListener("play", () => {
+    play.textContent = "❚❚";
+    play.setAttribute("aria-label", "Pause voice note");
+  });
+
+  chip.append(play, body);
+
+  if (removable) {
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "note-audio-remove";
+    remove.setAttribute("aria-label", "Remove voice note");
+    remove.innerHTML = TRASH_SVG;
+    remove.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const audioId = chip.dataset.audioId;
+      chip.remove();
+      if (audioId) void deleteStoredFile(audioId).catch(() => undefined);
+      onChanged?.();
+    });
+    chip.append(remove);
+  }
+}
+
+function hydrateAudioChipsIn(
+  root: HTMLElement,
+  urls: string[],
+  removable: boolean,
+  onChanged?: () => void,
+) {
+  root.querySelectorAll<HTMLElement>(".note-audio-chip[data-audio-id]").forEach((chip) => {
+    void hydrateAudioChip(chip, urls, removable, onChanged);
+  });
+}
+
 export function NoteEditor({
   name,
   defaultValue = "",
@@ -106,6 +214,8 @@ export function NoteEditor({
   required,
   disabled,
   minHeight = 120,
+  onChange,
+  className,
 }: Props) {
   const editorRef = useRef<HTMLDivElement>(null);
   const hiddenRef = useRef<HTMLInputElement>(null);
@@ -114,7 +224,10 @@ export function NoteEditor({
   const dictationRef = useRef<ReturnType<typeof startLiveTranscript> | null>(
     null,
   );
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
   const baseTextRef = useRef("");
+  const audioUrlsRef = useRef<string[]>([]);
   const [dictating, setDictating] = useState(false);
   const [recording, setRecording] = useState(false);
   const [status, setStatus] = useState("");
@@ -129,6 +242,13 @@ export function NoteEditor({
       html = "";
     }
     hidden.value = html;
+    onChangeRef.current?.(html);
+  }
+
+  function refreshAudioChips() {
+    const el = editorRef.current;
+    if (!el) return;
+    hydrateAudioChipsIn(el, audioUrlsRef.current, true, syncHidden);
   }
 
   useEffect(() => {
@@ -136,9 +256,12 @@ export function NoteEditor({
     if (!el) return;
     el.innerHTML = toEditableHtml(defaultValue) || "";
     syncHidden();
+    refreshAudioChips();
     return () => {
       dictationRef.current?.stop();
       if (mediaRef.current?.state === "recording") mediaRef.current.stop();
+      audioUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+      audioUrlsRef.current = [];
     };
     // seed once per mount (dialog formKey remounts)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -240,6 +363,7 @@ export function NoteEditor({
           } else {
             editorRef.current?.appendChild(chip);
           }
+          void hydrateAudioChip(chip, audioUrlsRef.current, true, syncHidden);
           syncHidden();
           setStatus("Voice note attached.");
         } catch (err) {
@@ -258,7 +382,9 @@ export function NoteEditor({
   }
 
   return (
-    <div className={`note-editor${disabled ? " is-disabled" : ""}`}>
+    <div
+      className={`note-editor${disabled ? " is-disabled" : ""}${className ? ` ${className}` : ""}`}
+    >
       <div className="note-toolbar" role="toolbar" aria-label="Note formatting">
         <button
           type="button"
@@ -303,20 +429,99 @@ export function NoteEditor({
         <button
           type="button"
           className="note-tool"
+          title="Italic"
+          disabled={disabled}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => runFormat(() => exec("italic"))}
+        >
+          <em>I</em>
+        </button>
+        <button
+          type="button"
+          className="note-tool"
+          title="Underline"
+          disabled={disabled}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => runFormat(() => exec("underline"))}
+        >
+          <span className="note-tool-underline">U</span>
+        </button>
+        <button
+          type="button"
+          className="note-tool note-tool-hl"
           title="Highlight"
           disabled={disabled}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() =>
             runFormat(() => {
+              const sel = window.getSelection();
+              if (!sel?.rangeCount || sel.isCollapsed) return;
+              const range = sel.getRangeAt(0);
+              const node =
+                range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+                  ? (range.commonAncestorContainer as Element)
+                  : range.commonAncestorContainer.parentElement;
+              const existing = node?.closest("mark.note-highlight");
+              if (existing && editorRef.current?.contains(existing)) {
+                const parent = existing.parentNode;
+                while (existing.firstChild) {
+                  parent?.insertBefore(existing.firstChild, existing);
+                }
+                existing.remove();
+                parent?.normalize();
+                return;
+              }
+              const mark = document.createElement("mark");
+              mark.className = "note-highlight";
               try {
-                exec("hiliteColor", "#ffe08a");
+                range.surroundContents(mark);
               } catch {
-                exec("backColor", "#ffe08a");
+                const frag = range.extractContents();
+                mark.appendChild(frag);
+                range.insertNode(mark);
               }
             })
           }
         >
           HL
+        </button>
+        <button
+          type="button"
+          className="note-tool"
+          title="Clear formatting"
+          disabled={disabled}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() =>
+            runFormat(() => {
+              exec("removeFormat");
+              exec("formatBlock", "p");
+              const sel = window.getSelection();
+              const node =
+                sel?.anchorNode &&
+                (sel.anchorNode.nodeType === Node.ELEMENT_NODE
+                  ? (sel.anchorNode as Element)
+                  : sel.anchorNode.parentElement);
+              const mark = node?.closest("mark.note-highlight");
+              if (mark && editorRef.current?.contains(mark)) {
+                const parent = mark.parentNode;
+                while (mark.firstChild) parent?.insertBefore(mark.firstChild, mark);
+                mark.remove();
+                parent?.normalize();
+              }
+            })
+          }
+        >
+          Clear
+        </button>
+        <button
+          type="button"
+          className="note-tool"
+          title="Undo"
+          disabled={disabled}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => runFormat(() => exec("undo"))}
+        >
+          Undo
         </button>
         <span className="note-tool-sep" aria-hidden />
         <button
@@ -384,23 +589,8 @@ export function NoteHtmlLive({
   useEffect(() => {
     const root = ref.current;
     if (!root || !safe) return;
-    const chips = root.querySelectorAll<HTMLElement>("[data-audio-id]");
     const urls: string[] = [];
-    chips.forEach((chip) => {
-      const id = chip.dataset.audioId;
-      if (!id) return;
-      void getFileRecord(id).then((rec) => {
-        if (!rec || !chip.isConnected) return;
-        const url = URL.createObjectURL(rec.blob);
-        urls.push(url);
-        chip.replaceChildren();
-        const audio = document.createElement("audio");
-        audio.controls = true;
-        audio.preload = "metadata";
-        audio.src = url;
-        chip.appendChild(audio);
-      });
-    });
+    hydrateAudioChipsIn(root, urls, false);
     return () => {
       urls.forEach((u) => URL.revokeObjectURL(u));
     };

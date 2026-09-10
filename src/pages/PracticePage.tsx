@@ -161,7 +161,7 @@ export function PracticePage() {
           <h2>Nice work</h2>
           <button
             type="button"
-            className="btn btn-primary btn-clay"
+            className="btn btn-primary"
             onClick={() => setSession(null)}
           >
             Back to practice
@@ -176,8 +176,8 @@ export function PracticePage() {
       <div className="module-page page-enter">
         <header className="page-head practice-session-head">
           <div>
-            <p className="eyebrow">{current.label}</p>
-            <h1>Recall</h1>
+            <p className="planner-caption">{current.label}</p>
+            <h1 className="planner-title">Recall</h1>
             <p className="muted">
               Card {index + 1} of {session.length}
               {againQueue.length > 0 ? ` · ${againQueue.length} to retry` : ""}
@@ -207,7 +207,7 @@ export function PracticePage() {
               />
               <button
                 type="button"
-                className="btn btn-primary btn-clay"
+                className="btn btn-primary"
                 onClick={() => setPhase("reveal")}
               >
                 Show answer
@@ -264,7 +264,7 @@ export function PracticePage() {
               </button>
               <button
                 type="button"
-                className="btn btn-primary btn-clay"
+                className="btn btn-primary"
                 disabled={browseCards.length === 0}
                 onClick={() => startSession(browseCards)}
               >

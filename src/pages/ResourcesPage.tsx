@@ -104,7 +104,7 @@ export function ResourcesPage() {
                   >
                     {r.url ? (
                       <a
-                        className="btn btn-primary btn-clay"
+                        className="btn btn-primary"
                         href={r.url}
                         target="_blank"
                         rel="noreferrer"
@@ -115,7 +115,7 @@ export function ResourcesPage() {
                     {r.file ? (
                       <button
                         type="button"
-                        className="btn btn-primary btn-clay"
+                        className="btn btn-primary"
                         onClick={() => handleOpenFile(r.file!.id)}
                       >
                         Open file

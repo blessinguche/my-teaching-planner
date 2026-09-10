@@ -1,18 +1,27 @@
-import { useMemo, useState } from "react";
-import { AddButton, AddDialog, PageHeader } from "../components/AddDialog";
+import { useEffect, useMemo, useState } from "react";
+import { AddDialog } from "../components/AddDialog";
 import {
   CalendarBoard,
   cursorLabel,
   eventsForDate,
+  MiniMonth,
   shiftCursor,
 } from "../components/CalendarBoard";
+import { PaperPage, Sheet } from "../components/PlannerUI";
+import {
+  eventMatchesSources,
+  schoolSwatch,
+  SOURCE_COLORS,
+  type CalendarSourceId,
+  type CalendarToggle,
+} from "../data/calendarSources";
 import { addDays, todayISO } from "../data/dates";
 import { buildIcs, downloadIcs } from "../data/ical";
 import { formatDayHeading, formatShortDate, useStore } from "../data/store";
+import { timetableEventsForRange } from "../data/timetableEvents";
 import type { EventKind, PlannerEvent } from "../data/types";
 
 type ViewMode = "month" | "week" | "day" | "agenda" | "deadlines";
-type KindFilter = "all" | "training" | "deadline" | "meeting" | "break";
 
 function daysUntil(iso: string, today: string) {
   const [y1, m1, d1] = today.split("-").map(Number);
@@ -22,27 +31,64 @@ function daysUntil(iso: string, today: string) {
   return Math.round((b - a) / 86400000);
 }
 
-function matchesKind(ev: PlannerEvent, filter: KindFilter) {
-  if (filter === "all") return true;
-  if (filter === "deadline") return ev.kind === "deadline" || !!ev.isAssessment;
-  if (filter === "meeting") return ev.kind === "meeting";
-  if (filter === "break") {
-    return (
-      ev.module === "Break" ||
-      /half term|break|holiday|easter|christmas/i.test(ev.title)
-    );
-  }
-  return ev.kind === "itap" || (ev.kind === "personal" && ev.module !== "Break");
+function eventTimeLabel(ev: PlannerEvent) {
+  if (ev.module === "Break") return "OFF";
+  if (ev.kind === "deadline" || ev.isAssessment) return "DUE";
+  return ev.start;
+}
+
+function softActive(active: boolean) {
+  return active
+    ? {
+        background: "var(--planner-teal-soft)",
+        borderColor: "var(--planner-line)",
+        color: "var(--planner-teal-deep)",
+        fontWeight: 800,
+      }
+    : undefined;
 }
 
 export function PlannerPage() {
   const { data, addEvent } = useStore();
   const today = todayISO();
-  const [view, setView] = useState<ViewMode>("month");
+  const [view, setView] = useState<ViewMode>("week");
   const [cursor, setCursor] = useState(today);
-  const [kind, setKind] = useState<KindFilter>("all");
   const [track, setTrack] = useState<"ft" | "all">("ft");
   const [addOpen, setAddOpen] = useState(false);
+
+  const schoolIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    data.schools.forEach((s, i) => map.set(s.id, i));
+    return map;
+  }, [data.schools]);
+
+  const calendarToggles = useMemo((): CalendarToggle[] => {
+    return [
+      { id: "qts", label: "QTS (NIoT days / events)", color: SOURCE_COLORS.qts },
+      { id: "deadlines", label: "Deadlines", color: SOURCE_COLORS.deadlines },
+      ...data.schools.map((s, i) => ({
+        id: `school:${s.id}` as CalendarSourceId,
+        label: s.shortName || s.name,
+        color: schoolSwatch(i),
+      })),
+    ];
+  }, [data.schools]);
+
+  const [enabledSources, setEnabledSources] = useState<Set<CalendarSourceId>>(
+    () => new Set(["qts", "deadlines"]),
+  );
+
+  useEffect(() => {
+    setEnabledSources((prev) => {
+      const next = new Set(prev);
+      next.add("qts");
+      next.add("deadlines");
+      for (const s of data.schools) {
+        next.add(`school:${s.id}`);
+      }
+      return next;
+    });
+  }, [data.schools]);
 
   const allEvents = useMemo(() => {
     const schoolClosures = data.schools.flatMap((school) =>
@@ -76,8 +122,14 @@ export function PlannerPage() {
         source: "school",
       }),
     );
-    return [...data.events, ...schoolClosures, ...homework];
-  }, [data.events, data.schools, data.homework]);
+    const lessons = timetableEventsForRange(
+      data.schools,
+      data.timetable,
+      addDays(today, -30),
+      addDays(today, 180),
+    );
+    return [...data.events, ...schoolClosures, ...homework, ...lessons];
+  }, [data.events, data.schools, data.homework, data.timetable, today]);
 
   const meetingOptions = useMemo(
     () =>
@@ -90,12 +142,12 @@ export function PlannerPage() {
 
   const filtered = useMemo(() => {
     return allEvents.filter((ev) => {
-      if (!matchesKind(ev, kind)) return false;
+      if (!eventMatchesSources(ev, enabledSources)) return false;
       const t = ev.track ?? "all";
       if (track === "ft" && (t === "pt" || t === "extension")) return false;
       return true;
     });
-  }, [allEvents, kind, track]);
+  }, [allEvents, enabledSources, track]);
 
   const agenda = useMemo(() => {
     const horizon = view === "agenda" ? addDays(today, 60) : addDays(today, 120);
@@ -117,6 +169,8 @@ export function PlannerPage() {
   }, [filtered, today, view]);
 
   const selectedDay = eventsForDate(filtered, cursor);
+  const showCalendar = view === "month" || view === "week" || view === "day";
+  const calMode = view === "month" || view === "week" || view === "day" ? view : "week";
 
   function exportIcs() {
     const ics = buildIcs({
@@ -127,226 +181,227 @@ export function PlannerPage() {
     downloadIcs("teaching-planner.ics", ics);
   }
 
-  const showCalendar = view === "month" || view === "week" || view === "day";
+  function toggleSource(id: CalendarSourceId) {
+    setEnabledSources((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   return (
-    <div className="module-page page-enter">
-      <PageHeader
-        eyebrow="Central calendar"
-        title="Calendar"
-        blurb="QTS, school terms, deadlines and meetings in one place. Click a day to preview · double-click for day view."
-        actions={
-          <>
-            <button type="button" className="btn" onClick={exportIcs}>
-              Export .ics
-            </button>
-            <AddButton label="Event" onClick={() => setAddOpen(true)} />
-          </>
-        }
-      />
-
-      <div className="toolbar-row">
-        <div className="tab-row" role="tablist">
-          {(
-            [
-              ["month", "Month"],
-              ["week", "Week"],
-              ["day", "Day"],
-              ["agenda", "Agenda"],
-              ["deadlines", "Deadlines"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              className={`btn${view === id ? " btn-primary btn-clay" : ""}`}
-              onClick={() => setView(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="tab-row">
-          <button
-            type="button"
-            className={`btn${track === "ft" ? " btn-primary btn-clay" : ""}`}
-            onClick={() => setTrack("ft")}
-          >
-            Full-time
-          </button>
-          <button
-            type="button"
-            className={`btn${track === "all" ? " btn-primary btn-clay" : ""}`}
-            onClick={() => setTrack("all")}
-          >
-            All tracks
-          </button>
-        </div>
-      </div>
-
-      <div className="tab-row" style={{ marginBottom: "1rem" }}>
-        {(
-          [
-            ["all", "All"],
-            ["training", "Training"],
-            ["deadline", "Assessments"],
-            ["break", "Breaks"],
-            ["meeting", "Meetings"],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            className={`btn${kind === id ? " btn-peach btn-clay" : ""}`}
-            onClick={() => setKind(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {showCalendar ? (
+    <PaperPage
+      title="Calendar"
+      caption="QTS, school terms, deadlines and meetings · week view by default"
+      actions={
         <>
-          <div className="cal-nav">
+          <button type="button" className="btn" onClick={exportIcs}>
+            Export .ics
+          </button>
+          <button type="button" className="btn" onClick={() => setAddOpen(true)}>
+            + Event
+          </button>
+        </>
+      }
+    >
+      <div className="gcal-shell">
+        <aside className="gcal-sidebar">
+          <button
+            type="button"
+            className="btn gcal-create"
+            onClick={() => setAddOpen(true)}
+          >
+            + Create
+          </button>
+
+          <MiniMonth
+            cursor={cursor}
+            onSelectDate={setCursor}
+            onShiftMonth={(dir) => setCursor(shiftCursor(cursor, "month", dir))}
+          />
+
+          <div className="gcal-cal-list">
+            <p className="gcal-cal-list-title">Calendars</p>
+            {calendarToggles.map((t) => {
+              const on = enabledSources.has(t.id);
+              return (
+                <label key={t.id} className={`gcal-cal-item${on ? " is-on" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() => toggleSource(t.id)}
+                  />
+                  <span
+                    className="gcal-swatch"
+                    style={{ background: t.color }}
+                    aria-hidden
+                  />
+                  <span>{t.label}</span>
+                </label>
+              );
+            })}
+          </div>
+
+          <div className="gcal-sidebar-meta">
+            <button
+              type="button"
+              className="btn"
+              style={softActive(track === "ft")}
+              onClick={() => setTrack("ft")}
+            >
+              Full-time
+            </button>
+            <button
+              type="button"
+              className="btn"
+              style={softActive(track === "all")}
+              onClick={() => setTrack("all")}
+            >
+              All tracks
+            </button>
+          </div>
+        </aside>
+
+        <div className="gcal-main">
+          <div className="gcal-topbar">
+            <button type="button" className="btn" onClick={() => setCursor(today)}>
+              Today
+            </button>
             <button
               type="button"
               className="btn"
               aria-label="Previous"
-              onClick={() =>
-                setCursor(shiftCursor(cursor, view as "month" | "week" | "day", -1))
-              }
+              onClick={() => setCursor(shiftCursor(cursor, calMode, -1))}
             >
               ‹
             </button>
-            <h2>{cursorLabel(cursor, view as "month" | "week" | "day")}</h2>
             <button
               type="button"
               className="btn"
               aria-label="Next"
-              onClick={() =>
-                setCursor(shiftCursor(cursor, view as "month" | "week" | "day", 1))
-              }
+              onClick={() => setCursor(shiftCursor(cursor, calMode, 1))}
             >
               ›
             </button>
-            <button type="button" className="btn" onClick={() => setCursor(today)}>
-              Today
-            </button>
+            <h2 className="gcal-period-label">
+              {showCalendar
+                ? cursorLabel(cursor, calMode)
+                : view === "deadlines"
+                  ? "Upcoming deadlines"
+                  : "Agenda"}
+            </h2>
+            <div className="gcal-view-switch" role="tablist">
+              {(
+                [
+                  ["week", "Week"],
+                  ["month", "Month"],
+                  ["day", "Day"],
+                  ["agenda", "Agenda"],
+                  ["deadlines", "Deadlines"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  className="btn"
+                  style={softActive(view === id)}
+                  onClick={() => setView(id)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <CalendarBoard
-            mode={view as "month" | "week" | "day"}
-            cursor={cursor}
-            events={filtered}
-            onSelectDate={(iso) => setCursor(iso)}
-            onOpenDay={(iso) => {
-              setCursor(iso);
-              setView("day");
-            }}
-          />
+          {showCalendar ? (
+            <>
+              <CalendarBoard
+                mode={calMode}
+                cursor={cursor}
+                events={filtered}
+                schoolColorIndex={schoolIndex}
+                onSelectDate={(iso) => setCursor(iso)}
+                onOpenDay={(iso) => {
+                  setCursor(iso);
+                  setView("day");
+                }}
+              />
 
-          {view !== "day" ? (
-            <section className="panel clay-panel" style={{ marginTop: "0.9rem" }}>
-              <h3 className="panel-title">{formatDayHeading(cursor)}</h3>
-              {selectedDay.length === 0 ? (
-                <p className="muted">Nothing on this day.</p>
-              ) : (
-                <ul>
-                  {selectedDay.map((ev) => (
-                    <li
-                      key={ev.id}
-                      className={`timeline-item${
-                        ev.kind === "deadline" || ev.isAssessment
-                          ? " is-deadline"
-                          : ev.module === "Break"
-                            ? " is-break"
-                            : ""
-                      }`}
-                    >
-                      <span
-                        className={`time-pill${
-                          ev.kind === "deadline" || ev.isAssessment
-                            ? " deadline"
-                            : ev.module === "Break"
-                              ? " break"
-                              : ""
-                        }`}
-                      >
-                        {ev.module === "Break"
-                          ? "OFF"
-                          : ev.kind === "deadline" || ev.isAssessment
-                            ? "DUE"
-                            : ev.start}
-                      </span>
-                      <div>
-                        <strong>{ev.title}</strong>
-                        {ev.detail ? <p className="hint">{ev.detail}</p> : null}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          ) : null}
-        </>
-      ) : (
-        <div className="planner-stack">
-          {agenda.length === 0 ? (
-            <p className="muted">Nothing in this view/filter.</p>
-          ) : null}
-          {agenda.map(([date, events]) => {
-            const isToday = date === today;
-            const dueIn = daysUntil(date, today);
-            return (
-              <section
-                key={date}
-                className={`panel day-sheet${isToday ? " is-today" : ""}`}
-              >
-                <div className="day-sheet-head">
-                  <div>
-                    <h2>{formatDayHeading(date)}</h2>
-                    <p className="hint">
-                      {events[0]?.module ?? "Programme"}
-                      {dueIn > 0 ? ` · in ${dueIn}d` : ""}
-                      {dueIn === 0 ? " · today" : ""}
-                    </p>
+              {view !== "day" && view !== "week" ? (
+                <Sheet className="hub-day-sheet">
+                  <div className="planner-bar soft" style={{ display: "block" }}>
+                    <span>{formatDayHeading(cursor)}</span>
                   </div>
-                  <span className="clay-chip">
-                    {isToday ? "Today" : formatShortDate(date)}
-                  </span>
-                </div>
-                <ul>
-                  {events.map((ev) => {
-                    const isDeadline =
-                      ev.kind === "deadline" || !!ev.isAssessment;
-                    const isBreak = ev.module === "Break";
-                    return (
-                      <li
-                        key={ev.id}
-                        className={`timeline-item${
-                          isDeadline ? " is-deadline" : isBreak ? " is-break" : ""
-                        }`}
-                      >
-                        <span
-                          className={`time-pill${
-                            isDeadline ? " deadline" : isBreak ? " break" : ""
-                          }`}
-                        >
-                          {isBreak ? "OFF" : isDeadline ? "DUE" : ev.start}
-                        </span>
-                        <div>
-                          <strong>{ev.title}</strong>
-                          {ev.detail ? <p className="hint">{ev.detail}</p> : null}
+                  <div className="planner-grid joined">
+                    {selectedDay.length === 0 ? (
+                      <div className="planner-row" style={{ gridTemplateColumns: "1fr" }}>
+                        <div className="planner-cell" style={{ padding: "0.55rem 0.65rem" }}>
+                          <span className="muted">Nothing on this day.</span>
                         </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            );
-          })}
+                      </div>
+                    ) : (
+                      selectedDay.map((ev) => (
+                        <div
+                          key={ev.id}
+                          className="planner-row"
+                          style={{ gridTemplateColumns: "18% 1fr" }}
+                        >
+                          <div className="planner-label-cell">{eventTimeLabel(ev)}</div>
+                          <div className="planner-cell" style={{ padding: "0.4rem 0.55rem" }}>
+                            <strong>{ev.title}</strong>
+                            {ev.detail ? <p className="hint">{ev.detail}</p> : null}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </Sheet>
+              ) : null}
+            </>
+          ) : (
+            <div className="planner-stack">
+              {agenda.length === 0 ? (
+                <p className="muted">Nothing in this view/filter.</p>
+              ) : null}
+              {agenda.map(([date, events]) => {
+                const isToday = date === today;
+                const dueIn = daysUntil(date, today);
+                return (
+                  <Sheet key={date}>
+                    <div
+                      className={`planner-bar${isToday ? "" : " soft"}`}
+                      style={{ gridTemplateColumns: "1fr auto" }}
+                    >
+                      <span>
+                        {formatDayHeading(date)}
+                        {dueIn > 0 ? ` · in ${dueIn}d` : ""}
+                        {dueIn === 0 ? " · today" : ""}
+                      </span>
+                      <span>{isToday ? "Today" : formatShortDate(date)}</span>
+                    </div>
+                    <div className="planner-grid joined">
+                      {events.map((ev) => (
+                        <div
+                          key={ev.id}
+                          className="planner-row"
+                          style={{ gridTemplateColumns: "18% 1fr" }}
+                        >
+                          <div className="planner-label-cell">{eventTimeLabel(ev)}</div>
+                          <div className="planner-cell" style={{ padding: "0.4rem 0.55rem" }}>
+                            <strong>{ev.title}</strong>
+                            {ev.detail ? <p className="hint">{ev.detail}</p> : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Sheet>
+                );
+              })}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       <AddDialog
         open={addOpen}
@@ -367,6 +422,10 @@ export function PlannerPage() {
               { value: "meeting", label: "Meeting" },
               { value: "itap", label: "Training / ITAP" },
               { value: "personal", label: "Break / personal" },
+              ...data.schools.map((s) => ({
+                value: `school:${s.id}`,
+                label: s.shortName || s.name,
+              })),
             ],
           },
           {
@@ -390,8 +449,15 @@ export function PlannerPage() {
         ]}
         onClose={() => setAddOpen(false)}
         onSubmit={(v) => {
-          const kindVal = (v.kind || "deadline") as EventKind;
-          const isBreak = kindVal === "personal";
+          const schoolMatch = /^school:(.+)$/.exec(v.kind || "");
+          const schoolId = schoolMatch?.[1];
+          const school = schoolId
+            ? data.schools.find((s) => s.id === schoolId)
+            : undefined;
+          const kindVal = school
+            ? ("meeting" as EventKind)
+            : ((v.kind || "deadline") as EventKind);
+          const isBreak = kindVal === "personal" && !school;
           addEvent({
             date: v.date,
             endDate: v.endDate || undefined,
@@ -402,13 +468,18 @@ export function PlannerPage() {
             kind: kindVal,
             track: "all",
             isAssessment: kindVal === "deadline",
-            module: isBreak ? "Break" : "Added by you",
+            module: school
+              ? school.shortName || school.name
+              : isBreak
+                ? "Break"
+                : "Added by you",
             link: v.link || undefined,
             linkedMeetingId: v.linkedMeetingId || undefined,
-            source: "personal",
+            schoolId: school?.id,
+            source: school ? "school" : kindVal === "itap" ? "qts" : "personal",
           });
         }}
       />
-    </div>
+    </PaperPage>
   );
 }

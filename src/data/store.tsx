@@ -76,6 +76,8 @@ type StoreApi = {
   updateTask: (id: string, patchData: Partial<TaskItem>) => void;
   deleteTask: (id: string) => void;
   addEvent: (input: Omit<PlannerEvent, "id">) => void;
+  updateEvent: (id: string, patchData: Partial<PlannerEvent>) => void;
+  deleteEvent: (id: string) => void;
   addAssessment: (
     input: Omit<AssessmentItem, "id" | "done"> & { done?: boolean },
   ) => void;
@@ -110,6 +112,7 @@ type StoreApi = {
     input: Omit<CaptureItem, "id" | "createdAt" | "updatedAt">,
   ) => string;
   updateCapture: (id: string, patchData: Partial<CaptureItem>) => void;
+  deleteCapture: (id: string) => Promise<void>;
   resetSeed: () => void;
   addSchool: (
     input: Omit<School, "id" | "createdAt"> & { id?: string },
@@ -119,6 +122,7 @@ type StoreApi = {
   addTimetableSlot: (input: Omit<TimetableSlot, "id">) => void;
   addHomework: (input: Omit<HomeworkItem, "id" | "done">) => void;
   toggleHomework: (id: string) => void;
+  deleteHomework: (id: string) => void;
   addComms: (input: Omit<CommsLog, "id">) => void;
   addContact: (input: Omit<ContactEntry, "id">) => void;
   addSchoolTodo: (input: Omit<SchoolTodo, "id" | "done">) => void;
@@ -136,6 +140,9 @@ type StoreApi = {
     mark: AttendanceMark;
     notes?: string;
   }) => void;
+  /** Generic account-synced patch for placement planner sheets */
+  patchData: (updater: (prev: AppData) => AppData) => void;
+  updateStudent: (id: string, patchData: Partial<Student>) => void;
 };
 
 const StoreContext = createContext<StoreApi | null>(null);
@@ -283,9 +290,25 @@ export function DataProvider({
       }
       void hydrateFromCloud();
     };
+    const onHide = () => {
+      if (hydratingRef.current) return;
+      if (!dirtyAccountRef.current) return;
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      void pushCloudNow();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") onHide();
+    };
     window.addEventListener("focus", onFocus);
+    window.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onHide);
     return () => {
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onHide);
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
     };
   }, [hydrateFromCloud, pushCloudNow]);
@@ -375,6 +398,31 @@ export function DataProvider({
           (a, b) =>
             a.date.localeCompare(b.date) || a.start.localeCompare(b.start),
         ),
+      }));
+    },
+    [patch],
+  );
+
+  const updateEvent = useCallback(
+    (id: string, patchData: Partial<PlannerEvent>) => {
+      patch((prev) => ({
+        ...prev,
+        events: prev.events
+          .map((e) => (e.id === id ? { ...e, ...patchData, id: e.id } : e))
+          .sort(
+            (a, b) =>
+              a.date.localeCompare(b.date) || a.start.localeCompare(b.start),
+          ),
+      }));
+    },
+    [patch],
+  );
+
+  const deleteEvent = useCallback(
+    (id: string) => {
+      patch((prev) => ({
+        ...prev,
+        events: prev.events.filter((e) => e.id !== id),
       }));
     },
     [patch],
@@ -612,6 +660,28 @@ export function DataProvider({
     [patch],
   );
 
+  const deleteCapture = useCallback(
+    async (id: string) => {
+      let fileId: string | undefined;
+      patch((prev) => {
+        const existing = prev.captures.find((c) => c.id === id);
+        fileId = existing?.audioFileId;
+        return {
+          ...prev,
+          captures: prev.captures.filter((c) => c.id !== id),
+        };
+      });
+      if (fileId) {
+        try {
+          await deleteStoredFile(fileId);
+        } catch {
+          // Capture metadata already removed; vault cleanup best-effort
+        }
+      }
+    },
+    [patch],
+  );
+
   const resetSeed = useCallback(() => {
     const account = { ...emptyAccount(), updatedAt: nowIso() };
     const next = composeAppData(account, dataRef.current.captures);
@@ -686,6 +756,16 @@ export function DataProvider({
         homework: prev.homework.map((h) =>
           h.id === id ? { ...h, done: !h.done } : h,
         ),
+      }));
+    },
+    [patch],
+  );
+
+  const deleteHomework = useCallback(
+    (id: string) => {
+      patch((prev) => ({
+        ...prev,
+        homework: prev.homework.filter((h) => h.id !== id),
       }));
     },
     [patch],
@@ -835,6 +915,25 @@ export function DataProvider({
     [patch],
   );
 
+  const patchData = useCallback(
+    (updater: (prev: AppData) => AppData) => {
+      patch(updater);
+    },
+    [patch],
+  );
+
+  const updateStudent = useCallback(
+    (id: string, patchDataIn: Partial<Student>) => {
+      patch((prev) => ({
+        ...prev,
+        students: prev.students.map((s) =>
+          s.id === id ? { ...s, ...patchDataIn } : s,
+        ),
+      }));
+    },
+    [patch],
+  );
+
   const value = useMemo(
     () => ({
       data,
@@ -848,6 +947,8 @@ export function DataProvider({
       updateTask,
       deleteTask,
       addEvent,
+      updateEvent,
+      deleteEvent,
       addAssessment,
       updateAssessment,
       deleteAssessment,
@@ -863,6 +964,7 @@ export function DataProvider({
       addReminder,
       addCapture,
       updateCapture,
+      deleteCapture,
       resetSeed,
       addSchool,
       addStudent,
@@ -870,6 +972,7 @@ export function DataProvider({
       addTimetableSlot,
       addHomework,
       toggleHomework,
+      deleteHomework,
       addComms,
       addContact,
       addSchoolTodo,
@@ -881,6 +984,8 @@ export function DataProvider({
       addBehaviour,
       addGrade,
       upsertAttendance,
+      patchData,
+      updateStudent,
     }),
     [
       data,
@@ -894,6 +999,8 @@ export function DataProvider({
       updateTask,
       deleteTask,
       addEvent,
+      updateEvent,
+      deleteEvent,
       addAssessment,
       updateAssessment,
       deleteAssessment,
@@ -909,6 +1016,7 @@ export function DataProvider({
       addReminder,
       addCapture,
       updateCapture,
+      deleteCapture,
       resetSeed,
       addSchool,
       addStudent,
@@ -916,6 +1024,7 @@ export function DataProvider({
       addTimetableSlot,
       addHomework,
       toggleHomework,
+      deleteHomework,
       addComms,
       addContact,
       addSchoolTodo,
@@ -927,6 +1036,8 @@ export function DataProvider({
       addBehaviour,
       addGrade,
       upsertAttendance,
+      patchData,
+      updateStudent,
     ],
   );
 
