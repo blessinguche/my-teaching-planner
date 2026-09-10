@@ -184,6 +184,20 @@ export function emptySchoolCollections() {
     projects: [] as import("./types").ProjectItem[],
     timetable: [] as import("./types").TimetableSlot[],
     lessons: [] as import("./types").LessonPlan[],
+    placementProfiles: [] as import("./types").PlacementProfile[],
+    logins: [] as import("./types").LoginEntry[],
+    keyRoles: [] as import("./types").KeyRolesMap[],
+    finds: [] as import("./types").FindEntry[],
+    trainingTargets: [] as import("./types").TrainingTarget[],
+    trainingAssignments: [] as import("./types").TrainingAssignment[],
+    weeklyPlans: [] as import("./types").WeeklyPlan[],
+    meetingNotes: [] as import("./types").MeetingNote[],
+    seating: [] as import("./types").SeatingCell[],
+    planningResources: [] as import("./types").PlanningResources[],
+    proudPlaces: [] as import("./types").ProudPlace[],
+    placementOverviews: [] as import("./types").PlacementOverview[],
+    calendarWeekNotes: [] as import("./types").CalendarWeekNote[],
+    classroomPracticeNotes: [] as import("./types").ClassroomPracticeNote[],
   };
 }
 

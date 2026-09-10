@@ -69,17 +69,17 @@ export function DashboardPage() {
 
   return (
     <div className="page-enter">
-      <header className="dash-header">
+      <header className="dash-header planner-page-head">
         <div>
-          <p className="eyebrow">QTS · NIoT 2026–27</p>
-          <h1>{formatToday()}</h1>
+          <p className="planner-caption">QTS · NIoT 2026–27</p>
+          <h1 className="planner-title">{formatToday()}</h1>
           <p className="subtitle">What do I need to do?</p>
         </div>
         <div className="page-actions">
-          <Link to="/qts/todos" className="btn btn-primary btn-clay">
+          <Link to="/qts/todos" className="btn btn-primary">
             All to-dos
           </Link>
-          <Link to="/qts/deadlines" className="btn btn-peach btn-clay">
+          <Link to="/qts/deadlines" className="btn btn-peach">
             Deadlines
           </Link>
         </div>
@@ -111,7 +111,7 @@ export function DashboardPage() {
           <p className="muted">cards due for recall</p>
           <Link
             to="/qts/practice"
-            className="btn btn-primary btn-clay"
+            className="btn btn-primary"
             style={{ marginTop: "0.85rem" }}
           >
             Test me

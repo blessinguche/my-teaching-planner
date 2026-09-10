@@ -1,6 +1,7 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthProvider";
 import { RequireAuth } from "./auth/RequireAuth";
+import { AccountShell } from "./components/layout/AccountShell";
 import { HubShell } from "./components/layout/HubShell";
 import { QtsShell } from "./components/layout/QtsShell";
 import { SchoolShell } from "./components/layout/SchoolShell";
@@ -16,31 +17,43 @@ import { ResourcesPage } from "./pages/ResourcesPage";
 import { SchoolsPage } from "./pages/SchoolsPage";
 import { TodosPage } from "./pages/TodosPage";
 import {
-  SchoolAttendancePage,
-  SchoolBehaviourPage,
-  SchoolBirthdaysPage,
-  SchoolCommsPage,
-  SchoolContactsPage,
-  SchoolGoalsPage,
-  SchoolGradesPage,
+  SchoolCalendarSpreadPage,
+  SchoolClassHubPage,
+  SchoolClassroomPracticePage,
+  SchoolFocusPage,
+  SchoolGroupsPage,
   SchoolHomePage,
-  SchoolHomeworkPage,
-  SchoolLessonsPage,
-  SchoolPdPage,
-  SchoolProjectsPage,
-  SchoolRosterPage,
-  SchoolSuppliesPage,
-  SchoolTermsPage,
-  SchoolTimetablePage,
-  SchoolTodosPage,
-} from "./pages/SchoolPages";
+  SchoolInfoPage,
+  SchoolLoginsPage,
+  SchoolMentorPage,
+  SchoolNotesHubPage,
+  SchoolObservedPage,
+  SchoolObservingPage,
+  SchoolOverviewPage,
+  SchoolPlanningPage,
+  SchoolProudPage,
+  SchoolRecordsTrackersPage,
+  SchoolResourcesFindsPage,
+  SchoolRolesPage,
+  SchoolStudentsNotesPage,
+  SchoolTargetsPage,
+  SchoolTimetableSpreadPage,
+  SchoolWeeklyPage,
+} from "./pages/SchoolPlannerPages";
+
+function SchoolRedirect({ to }: { to: string }) {
+  const { schoolId } = useParams();
+  return <Navigate to={`/school/${schoolId}/${to}`} replace />;
+}
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="account" element={<AccountPage />} />
+          <Route element={<AccountShell />}>
+            <Route path="account" element={<AccountPage />} />
+          </Route>
 
           <Route element={<RequireAuth />}>
             <Route element={<HubShell />}>
@@ -62,25 +75,55 @@ export default function App() {
 
             <Route path="school/:schoolId" element={<SchoolShell />}>
               <Route index element={<SchoolHomePage />} />
-              <Route path="terms" element={<SchoolTermsPage />} />
-              <Route path="timetable" element={<SchoolTimetablePage />} />
-              <Route path="lessons" element={<SchoolLessonsPage />} />
-              <Route path="roster" element={<SchoolRosterPage />} />
-              <Route path="attendance" element={<SchoolAttendancePage />} />
-              <Route path="grades" element={<SchoolGradesPage />} />
-              <Route path="behaviour" element={<SchoolBehaviourPage />} />
-              <Route path="homework" element={<SchoolHomeworkPage />} />
-              <Route path="comms" element={<SchoolCommsPage />} />
-              <Route path="contacts" element={<SchoolContactsPage />} />
-              <Route path="todos" element={<SchoolTodosPage />} />
-              <Route path="goals" element={<SchoolGoalsPage />} />
-              <Route path="pd" element={<SchoolPdPage />} />
-              <Route path="supplies" element={<SchoolSuppliesPage />} />
-              <Route path="projects" element={<SchoolProjectsPage />} />
-              <Route path="birthdays" element={<SchoolBirthdaysPage />} />
+              <Route path="focus" element={<SchoolFocusPage />} />
+              <Route path="calendar" element={<SchoolCalendarSpreadPage />} />
+              <Route path="planning" element={<SchoolPlanningPage />} />
+              <Route path="timetable" element={<SchoolTimetableSpreadPage />} />
+              <Route path="training" element={<SchoolTargetsPage />} />
+              <Route path="targets" element={<SchoolRedirect to="training" />} />
+              <Route path="notes" element={<SchoolNotesHubPage />} />
+              <Route path="mentor" element={<SchoolMentorPage />} />
+              <Route path="observed" element={<SchoolObservedPage />} />
+              <Route path="observing" element={<SchoolObservingPage />} />
+              <Route
+                path="classroom-practice"
+                element={<SchoolClassroomPracticePage />}
+              />
+              <Route path="class" element={<SchoolClassHubPage />} />
+              <Route path="students" element={<SchoolStudentsNotesPage />} />
+              <Route path="groups" element={<SchoolGroupsPage />} />
+              <Route path="seating" element={<SchoolRedirect to="groups" />} />
+              <Route path="records" element={<SchoolRecordsTrackersPage />} />
+              <Route path="overview" element={<SchoolOverviewPage />} />
+
+              {/* Focus section legacy paths */}
+              <Route path="info" element={<SchoolInfoPage />} />
+              <Route path="logins" element={<SchoolLoginsPage />} />
+              <Route path="roles" element={<SchoolRolesPage />} />
+              <Route path="resources" element={<SchoolResourcesFindsPage />} />
+              <Route path="proud" element={<SchoolProudPage />} />
+
+              {/* Planning section legacy paths */}
+              <Route path="weekly" element={<SchoolWeeklyPage />} />
+
+              {/* Other legacy school paths */}
+              <Route path="roster" element={<SchoolRedirect to="students" />} />
+              <Route path="attendance" element={<SchoolRedirect to="records#attendance" />} />
+              <Route path="behaviour" element={<SchoolRedirect to="records#behaviour" />} />
+              <Route path="grades" element={<SchoolRedirect to="records#grades" />} />
+              <Route path="homework" element={<SchoolRedirect to="records#homework" />} />
+              <Route path="lessons" element={<SchoolRedirect to="planning" />} />
+              <Route path="terms" element={<SchoolRedirect to="calendar" />} />
+              <Route path="todos" element={<SchoolRedirect to="planning" />} />
+              <Route path="goals" element={<SchoolRedirect to="training" />} />
+              <Route path="comms" element={<SchoolRedirect to="focus" />} />
+              <Route path="contacts" element={<SchoolRedirect to="focus" />} />
+              <Route path="pd" element={<SchoolRedirect to="planning" />} />
+              <Route path="supplies" element={<SchoolRedirect to="planning" />} />
+              <Route path="projects" element={<SchoolRedirect to="overview" />} />
+              <Route path="birthdays" element={<SchoolRedirect to="students" />} />
             </Route>
 
-            {/* Legacy QTS routes → new QTS area */}
             <Route path="todos" element={<Navigate to="/qts/todos" replace />} />
             <Route path="deadlines" element={<Navigate to="/qts/deadlines" replace />} />
             <Route path="knowledge" element={<Navigate to="/qts/knowledge" replace />} />

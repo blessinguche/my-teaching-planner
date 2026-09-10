@@ -232,6 +232,159 @@ export type LessonPlan = {
   notes?: string;
 };
 
+/** Placement planner — teacher focus / weekly / meetings extras */
+export type PlacementProfile = {
+  schoolId: string;
+  name: string;
+  placementSchools: string;
+  trainingProvider: string;
+  email: string;
+  phaseSubject: string;
+};
+
+export type LoginEntry = {
+  id: string;
+  schoolId: string;
+  website: string;
+  username: string;
+  password: string;
+};
+
+export type KeyRolesMap = {
+  schoolId: string;
+  placement: string;
+  headteacher: string;
+  deputy: string;
+  sendco: string;
+  dsl: string;
+  otherRoles: string;
+  myResponsibilities: string;
+  otherNotes: string;
+};
+
+export type FindEntry = {
+  id: string;
+  schoolId: string;
+  kind: "book" | "app" | "website" | "social";
+  title: string;
+  description: string;
+  rating: string;
+  platform?: string;
+};
+
+export type TrainingTarget = {
+  id: string;
+  schoolId: string;
+  placement: 1 | 2 | 3;
+  slot: 1 | 2 | 3;
+  target: string;
+  standardsRef: string;
+  midProgress: string;
+  midActions: string;
+  endProgress: string;
+  endActions: string;
+};
+
+/** Teacher training assignment tracker rows */
+export type TrainingAssignment = {
+  id: string;
+  schoolId: string;
+  title: string;
+  className: string;
+  dueDate: string;
+  done: boolean;
+  grade: string;
+};
+
+export type WeekTodo = {
+  id: string;
+  label: string;
+  done: boolean;
+};
+
+export type WeeklyPlan = {
+  id: string;
+  schoolId: string;
+  weekStart: string;
+  term: string;
+  weekLabel: string;
+  cells: Record<string, string>;
+  target: string;
+  wentWell: string;
+  todos: WeekTodo[];
+};
+
+export type MeetingNote = {
+  id: string;
+  schoolId: string;
+  kind: "mentor" | "observed" | "observing" | "training";
+  date: string;
+  observed: string;
+  focus: string;
+  subjectYear: string;
+  outline: string;
+  wentWell: string;
+  impact: string;
+  develop1: string;
+  develop2: string;
+  develop3: string;
+  body: string;
+  /** Mentor sheet — next meeting date */
+  nextMeetingDate?: string;
+};
+
+export type SeatingCell = {
+  id: string;
+  schoolId: string;
+  block: number;
+  row: number;
+  col: number;
+  text: string;
+};
+
+export type PlanningResources = {
+  schoolId: string;
+  planningTime: string;
+  staffMeetings: string;
+  mentorMeetings: string;
+  schemes: string;
+  planningAidWebsites: string;
+  onlineTools: string;
+  staffExpertise: string;
+  otherResources: string;
+  learningNeeds: string;
+};
+
+/** Endless classroom practice notes (dot-grid page) */
+export type ClassroomPracticeNote = {
+  id: string;
+  schoolId: string;
+  standardLabel: string;
+  body: string;
+};
+
+export type ProudPlace = {
+  schoolId: string;
+  proud: string;
+  nextAchieve: string;
+};
+
+export type PlacementOverview = {
+  schoolId: string;
+  term: string;
+  notes: string;
+  weekHeaders: string[];
+  weekCells: Record<string, string>;
+};
+
+/** Notes column on the school month calendar (one row per week). */
+export type CalendarWeekNote = {
+  id: string;
+  schoolId: string;
+  weekStart: string;
+  note: string;
+};
+
 export type AssessmentPriority = "critical" | "high" | "medium";
 
 export type AssessmentItem = {
@@ -351,4 +504,18 @@ export type AppData = {
   projects: ProjectItem[];
   timetable: TimetableSlot[];
   lessons: LessonPlan[];
+  placementProfiles: PlacementProfile[];
+  logins: LoginEntry[];
+  keyRoles: KeyRolesMap[];
+  finds: FindEntry[];
+  trainingTargets: TrainingTarget[];
+  trainingAssignments: TrainingAssignment[];
+  weeklyPlans: WeeklyPlan[];
+  meetingNotes: MeetingNote[];
+  seating: SeatingCell[];
+  planningResources: PlanningResources[];
+  proudPlaces: ProudPlace[];
+  placementOverviews: PlacementOverview[];
+  calendarWeekNotes: CalendarWeekNote[];
+  classroomPracticeNotes: ClassroomPracticeNote[];
 };

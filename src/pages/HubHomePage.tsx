@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { AddDialog } from "../components/AddDialog";
 import {
   CalendarBoard,
@@ -7,8 +6,11 @@ import {
   eventsForDate,
   shiftCursor,
 } from "../components/CalendarBoard";
-import { todayISO } from "../data/dates";
+import { JumpTiles, PaperPage, Sheet } from "../components/PlannerUI";
+import { SOURCE_COLORS, schoolSwatch } from "../data/calendarSources";
+import { addDays, todayISO } from "../data/dates";
 import { formatDayHeading, formatShortDate, useStore } from "../data/store";
+import { timetableEventsForRange } from "../data/timetableEvents";
 import type { PlannerEvent } from "../data/types";
 
 function formatToday() {
@@ -19,11 +21,23 @@ function formatToday() {
   }).format(new Date());
 }
 
+function eventTimeLabel(ev: PlannerEvent) {
+  if (ev.module === "Break") return "OFF";
+  if (ev.kind === "deadline" || ev.isAssessment) return "DUE";
+  return ev.start;
+}
+
 export function HubHomePage() {
   const { data, addEvent } = useStore();
   const today = todayISO();
   const [cursor, setCursor] = useState(today);
   const [addOpen, setAddOpen] = useState(false);
+
+  const schoolIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    data.schools.forEach((s, i) => map.set(s.id, i));
+    return map;
+  }, [data.schools]);
 
   const hubEvents = useMemo(() => {
     const closures = data.schools.flatMap((school) =>
@@ -57,51 +71,66 @@ export function HubHomePage() {
           source: "school",
         }),
       );
-    return [...data.events, ...closures, ...homework];
-  }, [data.events, data.schools, data.homework]);
+    const lessons = timetableEventsForRange(
+      data.schools,
+      data.timetable,
+      addDays(today, -14),
+      addDays(today, 120),
+    );
+    return [...data.events, ...closures, ...homework, ...lessons];
+  }, [data.events, data.schools, data.homework, data.timetable, today]);
 
   const selected = eventsForDate(hubEvents, cursor);
   const primarySchool = data.schools[0];
 
   return (
-    <div className="page-enter">
-      <header className="dash-header">
-        <div>
-          <p className="eyebrow">Teaching Planner</p>
-          <h1>{formatToday()}</h1>
-          <p className="subtitle">
-            One calendar for schools, QTS, deadlines and meetings.
-          </p>
-        </div>
-        <div className="page-actions">
-          <Link to="/cal" className="btn btn-primary btn-clay">
-            Open calendar
-          </Link>
-          <Link to="/qts" className="btn btn-peach btn-clay">
-            QTS area
-          </Link>
-        </div>
-      </header>
-
-      <div className="hub-jump-row">
-        {data.schools.map((school) => (
-          <Link
-            key={school.id}
-            className="btn btn-clay"
-            to={`/school/${school.id}`}
-          >
-            {school.shortName}
-          </Link>
-        ))}
-        <Link className="btn" to="/schools">
-          Manage schools
-        </Link>
+    <PaperPage
+      title={formatToday()}
+      caption="Teaching Planner · schools, QTS, deadlines"
+      actions={
         <button type="button" className="btn" onClick={() => setAddOpen(true)}>
           + Deadline / meeting
         </button>
+      }
+    >
+      <JumpTiles
+        items={[
+          ...data.schools.map((school) => ({
+            id: school.id,
+            label: school.shortName,
+            blurb: school.academicYear,
+            href: `/school/${school.id}`,
+          })),
+          { id: "schools", label: "Schools", blurb: "Manage", href: "/schools" },
+          { id: "cal", label: "Cal", blurb: "Full calendar", href: "/cal" },
+          { id: "qts", label: "QTS", blurb: "Standards", href: "/qts" },
+          {
+            id: "add-deadline",
+            label: "+ Deadline",
+            blurb: "Or meeting",
+            onClick: () => setAddOpen(true),
+          },
+        ]}
+      />
+
+      <div className="hub-cal-legend" aria-label="Calendar colours">
+        <span className="hub-cal-legend-item">
+          <i className="gcal-swatch" style={{ background: SOURCE_COLORS.qts }} />
+          QTS / NIoT
+        </span>
+        <span className="hub-cal-legend-item">
+          <i className="gcal-swatch" style={{ background: SOURCE_COLORS.deadlines }} />
+          Deadlines
+        </span>
+        {data.schools.map((s, i) => (
+          <span key={s.id} className="hub-cal-legend-item">
+            <i className="gcal-swatch" style={{ background: schoolSwatch(i) }} />
+            {s.shortName}
+          </span>
+        ))}
       </div>
 
-      <div className="cal-nav" style={{ marginTop: "1rem" }}>
+      <div className="cal-nav">
         <button
           type="button"
           className="btn"
@@ -128,49 +157,37 @@ export function HubHomePage() {
         mode="month"
         cursor={cursor}
         events={hubEvents}
+        schoolColorIndex={schoolIndex}
         onSelectDate={setCursor}
-        onOpenDay={(iso) => {
-          setCursor(iso);
-        }}
+        onOpenDay={(iso) => setCursor(iso)}
       />
 
-      <section className="panel clay-panel" style={{ marginTop: "0.9rem" }}>
-        <h3 className="panel-title">{formatDayHeading(cursor)}</h3>
-        {selected.length === 0 ? (
-          <p className="muted">Nothing on this day. Double-click a day on Cal for the full day view.</p>
-        ) : (
-          <ul>
-            {selected.map((ev) => {
+      <Sheet className="hub-day-sheet">
+        <div className="planner-bar soft" style={{ display: "block" }}>
+          <span>{formatDayHeading(cursor)}</span>
+        </div>
+        <div className="planner-grid joined">
+          {selected.length === 0 ? (
+            <div className="planner-row" style={{ gridTemplateColumns: "1fr" }}>
+              <div className="planner-cell" style={{ padding: "0.55rem 0.65rem" }}>
+                <span className="muted">
+                  Nothing on this day. Open Cal for the full week calendar.
+                </span>
+              </div>
+            </div>
+          ) : (
+            selected.map((ev) => {
               const meeting = ev.linkedMeetingId
                 ? hubEvents.find((m) => m.id === ev.linkedMeetingId)
                 : undefined;
               return (
-                <li
+                <div
                   key={ev.id}
-                  className={`timeline-item${
-                    ev.kind === "deadline" || ev.isAssessment
-                      ? " is-deadline"
-                      : ev.module === "Break"
-                        ? " is-break"
-                        : ""
-                  }`}
+                  className="planner-row"
+                  style={{ gridTemplateColumns: "18% 1fr" }}
                 >
-                  <span
-                    className={`time-pill${
-                      ev.kind === "deadline" || ev.isAssessment
-                        ? " deadline"
-                        : ev.module === "Break"
-                          ? " break"
-                          : ""
-                    }`}
-                  >
-                    {ev.module === "Break"
-                      ? "OFF"
-                      : ev.kind === "deadline" || ev.isAssessment
-                        ? "DUE"
-                        : ev.start}
-                  </span>
-                  <div>
+                  <div className="planner-label-cell">{eventTimeLabel(ev)}</div>
+                  <div className="planner-cell" style={{ padding: "0.4rem 0.55rem" }}>
                     <strong>{ev.title}</strong>
                     {ev.detail ? <p className="hint">{ev.detail}</p> : null}
                     {meeting ? (
@@ -186,12 +203,12 @@ export function HubHomePage() {
                       </p>
                     ) : null}
                   </div>
-                </li>
+                </div>
               );
-            })}
-          </ul>
-        )}
-      </section>
+            })
+          )}
+        </div>
+      </Sheet>
 
       {primarySchool ? (
         <p className="hint" style={{ marginTop: "1rem" }}>
@@ -237,6 +254,6 @@ export function HubHomePage() {
           });
         }}
       />
-    </div>
+    </PaperPage>
   );
 }

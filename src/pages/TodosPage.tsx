@@ -69,7 +69,7 @@ export function TodosPage() {
           <button
             key={id}
             type="button"
-            className={`btn${filter === id ? " btn-primary btn-clay" : ""}`}
+            className={`btn${filter === id ? " is-active-soft" : ""}`}
             onClick={() => setFilter(id)}
           >
             {label}

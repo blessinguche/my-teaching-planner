@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AddDialog, PageHeader } from "../components/AddDialog";
 import { CaptureAudioPlayer } from "../components/CaptureAudioPlayer";
+import { ConfirmDialog, Sheet } from "../components/PlannerUI";
 import { putBlob } from "../data/fileStore";
 import {
   speechSupported,
@@ -38,10 +39,14 @@ function pickMime(): string {
 }
 
 export function CapturePage() {
-  const { data, addCapture, updateCapture, addTask } = useStore();
+  const { data, addCapture, updateCapture, deleteCapture, addTask } = useStore();
   const [mode, setMode] = useState<Mode>("hub");
   const [editing, setEditing] = useState<CaptureItem | null>(null);
-  const [listeningId, setListeningId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftBody, setDraftBody] = useState("");
+  const [draftTranscript, setDraftTranscript] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<CaptureItem | null>(null);
 
   const [noteTitle, setNoteTitle] = useState("");
   const [noteBody, setNoteBody] = useState("");
@@ -356,7 +361,7 @@ export function CapturePage() {
               </button>
               <button
                 type="button"
-                className="btn btn-primary btn-clay"
+                className="btn btn-primary"
                 onClick={() => setMode("record")}
               >
                 Record
@@ -413,49 +418,181 @@ export function CapturePage() {
           <h2 className="section-label">Recent captures</h2>
           <ul className="todo-page-list">
             {data.captures.map((c) => {
-              const openPlayer = listeningId === c.id;
+              const isAudio = c.kind === "recording" || Boolean(c.audioFileId);
+              const expanded = expandedId === c.id;
               return (
-                <li key={c.id} className="panel todo-page-item capture-row">
+                <li
+                  key={c.id}
+                  className={`panel todo-page-item capture-row${
+                    expanded ? " is-expanded" : ""
+                  }`}
+                >
                   <div className="capture-row-main">
                     <button
                       type="button"
                       className="todo-page-main as-button"
-                      onClick={() => setEditing(c)}
+                      onClick={() => {
+                        if (isAudio) {
+                          if (expanded) {
+                            setExpandedId(null);
+                            return;
+                          }
+                          setExpandedId(c.id);
+                          setDraftTitle(c.title);
+                          setDraftBody(c.body);
+                          setDraftTranscript(c.transcript ?? "");
+                          setEditing(null);
+                          return;
+                        }
+                        setEditing(c);
+                      }}
                     >
                       <strong>
-                        {c.kind === "recording" ? "🎙 " : "✎ "}
+                        {isAudio ? "🎙 " : "✎ "}
                         {c.title}
                       </strong>
                       <p className="hint">{formatWhen(c.updatedAt)}</p>
-                      <p className="hint notes-preview">
-                        {(c.transcript || c.body).slice(0, 140)}
-                        {(c.transcript || c.body).length > 140 ? "…" : ""}
-                      </p>
+                      {!expanded ? (
+                        <p className="hint notes-preview">
+                          {(c.transcript || c.body).slice(0, 140)}
+                          {(c.transcript || c.body).length > 140 ? "…" : ""}
+                        </p>
+                      ) : null}
                     </button>
                     <div className="capture-row-actions">
-                      {c.audioFileId ? (
+                      {isAudio ? (
                         <button
                           type="button"
-                          className={`btn btn-clay${openPlayer ? " btn-primary" : " btn-peach"}`}
-                          onClick={() =>
-                            setListeningId((id) => (id === c.id ? null : c.id))
-                          }
+                          className={`btn${expanded ? " btn-primary" : " btn-peach"}`}
+                          onClick={() => {
+                            if (expanded) {
+                              setExpandedId(null);
+                              return;
+                            }
+                            setExpandedId(c.id);
+                            setDraftTitle(c.title);
+                            setDraftBody(c.body);
+                            setDraftTranscript(c.transcript ?? "");
+                            setEditing(null);
+                          }}
                         >
-                          {openPlayer ? "Hide" : "Listen"}
+                          {expanded ? "Close" : "Listen"}
                         </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="btn"
-                        onClick={() => setEditing(c)}
-                      >
-                        Edit
-                      </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={() => setEditing(c)}
+                        >
+                          Edit
+                        </button>
+                      )}
                     </div>
                   </div>
-                  {openPlayer && c.audioFileId ? (
-                    <div className="capture-inline-player">
-                      <CaptureAudioPlayer fileId={c.audioFileId} />
+
+                  {isAudio ? (
+                    <div
+                      className="capture-expand"
+                      aria-hidden={!expanded}
+                    >
+                      <div className="capture-expand-inner">
+                        <div className="capture-expand-panel">
+                          {c.audioFileId ? (
+                            <div className="capture-inline-player">
+                              <p className="section-label">Audio</p>
+                              <CaptureAudioPlayer fileId={c.audioFileId} />
+                            </div>
+                          ) : null}
+
+                          <div className="planner-grid joined capture-inline-grid">
+                            <div
+                              className="planner-row"
+                              style={{ gridTemplateColumns: "7.5rem 1fr" }}
+                            >
+                              <div className="planner-label-cell">Title</div>
+                              <div className="planner-cell capture-compose-cell">
+                                <input
+                                  className="planner-input"
+                                  value={expanded ? draftTitle : c.title}
+                                  onChange={(e) => setDraftTitle(e.target.value)}
+                                  disabled={!expanded}
+                                />
+                              </div>
+                            </div>
+                            <div
+                              className="planner-row"
+                              style={{ gridTemplateColumns: "7.5rem 1fr" }}
+                            >
+                              <div className="planner-label-cell">Notes</div>
+                              <div className="planner-cell capture-compose-cell">
+                                <textarea
+                                  className="planner-input capture-inline-textarea"
+                                  rows={4}
+                                  value={expanded ? draftBody : c.body}
+                                  onChange={(e) => setDraftBody(e.target.value)}
+                                  disabled={!expanded}
+                                  placeholder="Notes…"
+                                />
+                              </div>
+                            </div>
+                            <div
+                              className="planner-row"
+                              style={{ gridTemplateColumns: "7.5rem 1fr" }}
+                            >
+                              <div className="planner-label-cell">Transcript</div>
+                              <div className="planner-cell capture-compose-cell">
+                                <textarea
+                                  className="planner-input capture-inline-textarea"
+                                  rows={5}
+                                  value={
+                                    expanded
+                                      ? draftTranscript
+                                      : c.transcript ?? ""
+                                  }
+                                  onChange={(e) =>
+                                    setDraftTranscript(e.target.value)
+                                  }
+                                  disabled={!expanded}
+                                  placeholder="Transcript from audio…"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="capture-expand-actions">
+                            <button
+                              type="button"
+                              className="btn btn-peach"
+                              onClick={() => setPendingDelete(c)}
+                            >
+                              Delete recording
+                            </button>
+                            <div className="capture-expand-actions-right">
+                              <button
+                                type="button"
+                                className="btn"
+                                onClick={() => setExpandedId(null)}
+                              >
+                                Close
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-primary"
+                                onClick={() => {
+                                  updateCapture(c.id, {
+                                    title: draftTitle.trim() || c.title,
+                                    body: draftBody,
+                                    transcript: draftTranscript,
+                                  });
+                                  setExpandedId(null);
+                                }}
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   ) : null}
                 </li>
@@ -469,127 +606,158 @@ export function CapturePage() {
       ) : null}
 
       {mode === "note" ? (
-        <section className="panel clay-panel" style={{ maxWidth: 640 }}>
-          <h2 className="panel-title">Quick note</h2>
-          <label className="field">
-            <span>Title</span>
-            <input
-              value={noteTitle}
-              onChange={(e) => setNoteTitle(e.target.value)}
-              placeholder="Mentor meeting · Day 2"
-            />
-          </label>
-          <label className="field" style={{ marginTop: "0.75rem" }}>
-            <span>Notes</span>
-            <textarea
-              className="clay-textarea"
-              rows={8}
-              value={noteBody}
-              onChange={(e) => setNoteBody(e.target.value)}
-              placeholder="Key points, actions, questions…"
-            />
-          </label>
-          <button
-            type="button"
-            className="btn btn-primary btn-clay"
-            onClick={saveNote}
-          >
-            Save note
-          </button>
-        </section>
+        <div className="capture-compose">
+          <h2 className="planner-heading">Quick note</h2>
+          <Sheet className="capture-compose-sheet">
+            <div className="planner-grid joined capture-compose-grid">
+              <div
+                className="planner-row"
+                style={{ gridTemplateColumns: "7.5rem 1fr" }}
+              >
+                <div className="planner-label-cell">Title</div>
+                <div className="planner-cell capture-compose-cell">
+                  <input
+                    className="planner-input"
+                    value={noteTitle}
+                    onChange={(e) => setNoteTitle(e.target.value)}
+                    placeholder="Mentor meeting · Day 2"
+                  />
+                </div>
+              </div>
+              <div
+                className="planner-row capture-compose-notes-row"
+                style={{ gridTemplateColumns: "7.5rem 1fr" }}
+              >
+                <div className="planner-label-cell">Notes</div>
+                <div className="planner-cell capture-compose-cell is-tall">
+                  <textarea
+                    className="planner-input capture-compose-textarea"
+                    rows={14}
+                    value={noteBody}
+                    onChange={(e) => setNoteBody(e.target.value)}
+                    placeholder="Key points, actions, questions…"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="capture-compose-actions">
+              <button type="button" className="btn" onClick={() => setMode("hub")}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-primary" onClick={saveNote}>
+                Save note
+              </button>
+            </div>
+          </Sheet>
+        </div>
       ) : null}
 
       {mode === "record" ? (
-        <section className="panel clay-panel" style={{ maxWidth: 640 }}>
-          <h2 className="panel-title">Record</h2>
-          <p className="muted" style={{ marginBottom: "1rem" }}>
-            Hit start — no checklist. Audio + transcript autosave every 3
-            minutes so a closed tab doesn’t wipe the session. Captures are
-            never deleted from the app.
-          </p>
-
-          <label className="field">
-            <span>Label</span>
-            <select
-              value={context}
-              disabled={recording || saving}
-              onChange={(e) => setContext(e.target.value)}
-            >
-              <option>Mentor meeting</option>
-              <option>Training / ITAP session</option>
-              <option>Self practice / rehearsal</option>
-              <option>Other session</option>
-            </select>
-          </label>
-
-          <div className="record-status">
-            <div className={`record-dot${recording ? " live" : ""}`} aria-hidden />
-            <span className="record-timer">
-              {recording ? `${mm}:${ss}` : "Ready"}
-            </span>
-          </div>
-
-          {lastAutosave ? (
-            <p className="hint">Last autosave: {lastAutosave}</p>
-          ) : null}
-
-          {(recording || liveTranscript) && (
-            <div className="live-transcript clay-sunken">
-              <p className="section-label">Live transcript</p>
-              <p className="recall-answer">
-                {liveTranscript || "Listening…"}
-              </p>
-            </div>
-          )}
-
-          {!recording ? (
-            <button
-              type="button"
-              className="btn btn-peach btn-clay"
-              onClick={startRecording}
-              disabled={saving}
-            >
-              Start recording
-            </button>
-          ) : (
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => void runAutosave()}
-                disabled={saving}
-              >
-                Save now
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary btn-clay"
-                onClick={stopRecording}
-                disabled={saving}
-              >
-                {saving ? "Saving…" : "Stop & save"}
-              </button>
-            </div>
-          )}
-
-          {status ? (
-            <p className="hint" style={{ marginTop: "0.85rem" }}>
-              {status}
+        <div className="capture-compose">
+          <h2 className="planner-heading">Record</h2>
+          <Sheet className="capture-compose-sheet">
+            <p className="capture-compose-blurb">
+              Hit start — no checklist. Audio + transcript autosave every 3
+              minutes so a closed tab doesn’t wipe the session. You can delete a
+              recording later from Recent captures.
             </p>
-          ) : null}
-        </section>
+
+            <div className="planner-grid joined capture-compose-grid">
+              <div
+                className="planner-row"
+                style={{ gridTemplateColumns: "7.5rem 1fr" }}
+              >
+                <div className="planner-label-cell">Label</div>
+                <div className="planner-cell capture-compose-cell">
+                  <select
+                    className="planner-select"
+                    value={context}
+                    disabled={recording || saving}
+                    onChange={(e) => setContext(e.target.value)}
+                  >
+                    <option>Mentor meeting</option>
+                    <option>Training / ITAP session</option>
+                    <option>Self practice / rehearsal</option>
+                    <option>Other session</option>
+                  </select>
+                </div>
+              </div>
+              <div
+                className="planner-row"
+                style={{ gridTemplateColumns: "7.5rem 1fr" }}
+              >
+                <div className="planner-label-cell">Status</div>
+                <div className="planner-cell capture-compose-cell">
+                  <div className="record-status">
+                    <div
+                      className={`record-dot${recording ? " live" : ""}`}
+                      aria-hidden
+                    />
+                    <span className="record-timer">
+                      {recording ? `${mm}:${ss}` : "Ready"}
+                    </span>
+                    {lastAutosave ? (
+                      <span className="hint">Last autosave: {lastAutosave}</span>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {(recording || liveTranscript) && (
+              <div className="capture-live-block">
+                <p className="section-label">Live transcript</p>
+                <p className="capture-live-text">
+                  {liveTranscript || "Listening…"}
+                </p>
+              </div>
+            )}
+
+            <div className="capture-compose-actions">
+              {!recording ? (
+                <button
+                  type="button"
+                  className="btn btn-peach"
+                  onClick={startRecording}
+                  disabled={saving}
+                >
+                  Start recording
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => void runAutosave()}
+                    disabled={saving}
+                  >
+                    Save now
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={stopRecording}
+                    disabled={saving}
+                  >
+                    {saving ? "Saving…" : "Stop & save"}
+                  </button>
+                </>
+              )}
+            </div>
+
+            {status ? (
+              <p className="capture-compose-status">{status}</p>
+            ) : null}
+          </Sheet>
+        </div>
       ) : null}
 
       <AddDialog
-        open={!!editing}
+        open={!!editing && editing.kind !== "recording" && !editing.audioFileId}
         formKey={editing?.id}
-        title="Edit capture"
+        title="Edit note"
         submitLabel="Save"
-        description={
-          editing?.audioFileId
-            ? "Play below, then edit notes / transcript. Captures can’t be deleted."
-            : "Captures can’t be deleted — edit instead."
-        }
+        description="Edit notes on this capture."
         fields={[
           {
             name: "title",
@@ -603,13 +771,6 @@ export function CapturePage() {
             type: "textarea",
             defaultValue: editing?.body,
           },
-          {
-            name: "transcript",
-            label: "Transcript (from audio)",
-            type: "textarea",
-            defaultValue: editing?.transcript ?? "",
-            placeholder: "Generated while recording — edit for accuracy…",
-          },
         ]}
         onClose={() => setEditing(null)}
         onSubmit={(v) => {
@@ -617,17 +778,27 @@ export function CapturePage() {
           updateCapture(editing.id, {
             title: v.title,
             body: v.body || "",
-            transcript: v.transcript || "",
           });
         }}
-      >
-        {editing?.audioFileId ? (
-          <div className="capture-audio-block">
-            <p className="section-label">Listen</p>
-            <CaptureAudioPlayer fileId={editing.audioFileId} />
-          </div>
-        ) : null}
-      </AddDialog>
+      />
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title="Delete audio capture?"
+        message={`This will permanently remove “${
+          pendingDelete?.title ?? "this recording"
+        }” and its audio from this device. This can’t be undone.`}
+        confirmLabel="Delete recording"
+        danger
+        onConfirm={() => {
+          if (!pendingDelete) return;
+          const id = pendingDelete.id;
+          void deleteCapture(id);
+          if (expandedId === id) setExpandedId(null);
+          if (editing?.id === id) setEditing(null);
+        }}
+        onClose={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

@@ -296,11 +296,7 @@ export function AddButton({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      className="btn btn-primary btn-clay add-btn"
-      onClick={onClick}
-    >
+    <button type="button" className="btn btn-primary add-btn" onClick={onClick}>
       <span aria-hidden>+</span> {label}
     </button>
   );
@@ -318,10 +314,10 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header className="page-head page-head-row">
+    <header className="page-head page-head-row planner-page-head">
       <div>
-        <p className="eyebrow">{eyebrow}</p>
-        <h1>{title}</h1>
+        <p className="planner-caption">{eyebrow}</p>
+        <h1 className="planner-title">{title}</h1>
         {blurb ? <p className="muted">{blurb}</p> : null}
       </div>
       {actions ? <div className="page-actions">{actions}</div> : null}

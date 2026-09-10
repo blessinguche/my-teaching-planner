@@ -7,26 +7,40 @@ import type {
   AttendanceRecord,
   BehaviourLog,
   CaptureItem,
+  CalendarWeekNote,
+  ClassroomPracticeNote,
   ClassGroup,
   CommsLog,
   ContactEntry,
+  FindEntry,
   GlossaryEntry,
   GoalItem,
   GradeEntry,
   HomeworkItem,
+  KeyRolesMap,
   LessonPlan,
+  LoginEntry,
+  MeetingNote,
   PdEntry,
+  PlacementOverview,
+  PlacementProfile,
   PlannerEvent,
+  PlanningResources,
   ProjectItem,
+  ProudPlace,
   ReminderPin,
   ResourceLink,
   School,
   SchoolTodo,
+  SeatingCell,
   SrsCardProgress,
   Student,
   SupplyItem,
   TaskItem,
   TimetableSlot,
+  TrainingAssignment,
+  TrainingTarget,
+  WeeklyPlan,
 } from "./types";
 
 const LEGACY_STORAGE_KEY = "qts-planner-data";
@@ -35,7 +49,7 @@ const LEGACY_ACCOUNT_PREFIX = "qts-planner-personal:";
 const CAPTURES_PREFIX = "teaching-planner-captures:";
 const LEGACY_CAPTURES_PREFIX = "qts-planner-captures:";
 
-/** Synced to the signed-in account. Never includes captures. */
+/** Synced to the signed-in account (notes, plans, timetable, capture text, …). */
 export type AccountPayload = {
   version: number;
   updatedAt: string;
@@ -68,6 +82,22 @@ export type AccountPayload = {
   projects: ProjectItem[];
   timetable: TimetableSlot[];
   lessons: LessonPlan[];
+  placementProfiles: PlacementProfile[];
+  logins: LoginEntry[];
+  keyRoles: KeyRolesMap[];
+  finds: FindEntry[];
+  trainingTargets: TrainingTarget[];
+  trainingAssignments: TrainingAssignment[];
+  weeklyPlans: WeeklyPlan[];
+  meetingNotes: MeetingNote[];
+  seating: SeatingCell[];
+  planningResources: PlanningResources[];
+  proudPlaces: ProudPlace[];
+  placementOverviews: PlacementOverview[];
+  calendarWeekNotes: CalendarWeekNote[];
+  classroomPracticeNotes: ClassroomPracticeNote[];
+  /** Capture notes/transcripts (audio blobs stay device-local). */
+  captures: CaptureItem[];
 };
 
 function defaultSchools(): School[] {
@@ -95,6 +125,7 @@ export function emptyAccount(): AccountPayload {
     customResources: [],
     schools: defaultSchools(),
     ...bits,
+    captures: [],
   };
 }
 
@@ -163,6 +194,25 @@ export function accountFromFullDump(
     projects: data.projects ?? [],
     timetable: data.timetable ?? [],
     lessons: data.lessons ?? [],
+    placementProfiles: data.placementProfiles ?? [],
+    logins: data.logins ?? [],
+    keyRoles: data.keyRoles ?? [],
+    finds: data.finds ?? [],
+    trainingTargets: data.trainingTargets ?? [],
+    trainingAssignments: data.trainingAssignments ?? [],
+    weeklyPlans: data.weeklyPlans ?? [],
+    meetingNotes: data.meetingNotes ?? [],
+    seating: data.seating ?? [],
+    planningResources: data.planningResources ?? [],
+    proudPlaces: data.proudPlaces ?? [],
+    placementOverviews: data.placementOverviews ?? [],
+    calendarWeekNotes: data.calendarWeekNotes ?? [],
+    classroomPracticeNotes: data.classroomPracticeNotes ?? [],
+    captures: (data.captures ?? []).map((c) => ({
+      ...c,
+      // Keep id for cross-device note sync; audio bytes stay in local vault
+      audioFileId: c.audioFileId,
+    })),
   };
 }
 
@@ -240,6 +290,23 @@ function asAccount(parsed: Partial<AccountPayload> & Partial<AppData>): AccountP
     projects: parsed.projects ?? bits.projects,
     timetable: parsed.timetable ?? bits.timetable,
     lessons: parsed.lessons ?? bits.lessons,
+    placementProfiles: parsed.placementProfiles ?? bits.placementProfiles,
+    logins: parsed.logins ?? bits.logins,
+    keyRoles: parsed.keyRoles ?? bits.keyRoles,
+    finds: parsed.finds ?? bits.finds,
+    trainingTargets: parsed.trainingTargets ?? bits.trainingTargets,
+    trainingAssignments:
+      parsed.trainingAssignments ?? bits.trainingAssignments,
+    weeklyPlans: parsed.weeklyPlans ?? bits.weeklyPlans,
+    meetingNotes: parsed.meetingNotes ?? bits.meetingNotes,
+    seating: parsed.seating ?? bits.seating,
+    planningResources: parsed.planningResources ?? bits.planningResources,
+    proudPlaces: parsed.proudPlaces ?? bits.proudPlaces,
+    placementOverviews: parsed.placementOverviews ?? bits.placementOverviews,
+    calendarWeekNotes: parsed.calendarWeekNotes ?? bits.calendarWeekNotes,
+    classroomPracticeNotes:
+      parsed.classroomPracticeNotes ?? bits.classroomPracticeNotes,
+    captures: parsed.captures ?? [],
   };
 }
 
@@ -366,6 +433,31 @@ export function recoverCaptures(userId: string): CaptureItem[] {
   return [];
 }
 
+export function mergeCaptures(
+  cloud: CaptureItem[],
+  local: CaptureItem[],
+): CaptureItem[] {
+  const map = new Map<string, CaptureItem>();
+  for (const c of cloud) map.set(c.id, { ...c });
+  for (const c of local) {
+    const existing = map.get(c.id);
+    if (!existing) {
+      map.set(c.id, c);
+      continue;
+    }
+    const cloudTime = Date.parse(existing.updatedAt) || 0;
+    const localTime = Date.parse(c.updatedAt) || 0;
+    const newer = localTime >= cloudTime ? c : existing;
+    map.set(c.id, {
+      ...newer,
+      audioFileId: c.audioFileId ?? existing.audioFileId,
+    });
+  }
+  return [...map.values()].sort((a, b) =>
+    b.updatedAt.localeCompare(a.updatedAt),
+  );
+}
+
 export function composeAppData(
   account: AccountPayload,
   captures: CaptureItem[],
@@ -408,7 +500,7 @@ export function composeAppData(
       ...account.customResources,
     ],
     reminders: account.reminders,
-    captures,
+    captures: mergeCaptures(account.captures ?? [], captures),
     srs: account.srs,
     schools: account.schools?.length ? account.schools : defaultSchools(),
     classes: account.classes ?? [],
@@ -426,6 +518,20 @@ export function composeAppData(
     projects: account.projects ?? [],
     timetable: account.timetable ?? [],
     lessons: account.lessons ?? [],
+    placementProfiles: account.placementProfiles ?? [],
+    logins: account.logins ?? [],
+    keyRoles: account.keyRoles ?? [],
+    finds: account.finds ?? [],
+    trainingTargets: account.trainingTargets ?? [],
+    trainingAssignments: account.trainingAssignments ?? [],
+    weeklyPlans: account.weeklyPlans ?? [],
+    meetingNotes: account.meetingNotes ?? [],
+    seating: account.seating ?? [],
+    planningResources: account.planningResources ?? [],
+    proudPlaces: account.proudPlaces ?? [],
+    placementOverviews: account.placementOverviews ?? [],
+    calendarWeekNotes: account.calendarWeekNotes ?? [],
+    classroomPracticeNotes: account.classroomPracticeNotes ?? [],
   };
 }
 
