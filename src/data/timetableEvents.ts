@@ -13,6 +13,64 @@ function schoolClosedOn(school: School, iso: string): boolean {
   return school.closures.some((c) => c.start <= iso && iso <= c.end);
 }
 
+/** `tt:slotId:YYYY-MM-DD` or merged `tt:slotA+slotB:YYYY-MM-DD` */
+export function timetableSlotIdsFromEventId(id: string): string[] {
+  if (!id.startsWith("tt:")) return [];
+  const rest = id.slice(3);
+  const colon = rest.lastIndexOf(":");
+  if (colon < 0) return [];
+  return rest
+    .slice(0, colon)
+    .split("+")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** Merge identical back-to-back lessons into one longer block. */
+export function mergeAdjacentTimetableEvents(
+  events: PlannerEvent[],
+): PlannerEvent[] {
+  if (events.length < 2) return events;
+
+  const sorted = [...events].sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      (a.schoolId ?? "").localeCompare(b.schoolId ?? "") ||
+      a.title.localeCompare(b.title) ||
+      a.start.localeCompare(b.start),
+  );
+
+  const merged: PlannerEvent[] = [];
+  for (const ev of sorted) {
+    const prev = merged[merged.length - 1];
+    if (
+      prev &&
+      prev.date === ev.date &&
+      prev.schoolId === ev.schoolId &&
+      prev.title === ev.title &&
+      prev.end === ev.start
+    ) {
+      const prevSlots = timetableSlotIdsFromEventId(prev.id);
+      const nextSlots = timetableSlotIdsFromEventId(ev.id);
+      const modules = [prev.module, ev.module].filter(Boolean) as string[];
+      const details = [prev.detail, ev.detail].filter(Boolean) as string[];
+      prev.end = ev.end;
+      prev.id = `tt:${[...prevSlots, ...nextSlots].join("+")}:${prev.date}`;
+      if (modules.length) {
+        prev.module = [...new Set(modules)].join(" · ");
+      }
+      if (details.length) {
+        const unique = [...new Set(details)];
+        prev.detail = unique.length === 1 ? unique[0]! : unique.join(" → ");
+      }
+      continue;
+    }
+    merged.push({ ...ev });
+  }
+
+  return merged.sort((a, b) => a.start.localeCompare(b.start));
+}
+
 /** One day’s teaching slots as calendar events (empty class names skipped). */
 export function timetableEventsOnDate(
   schools: School[],
@@ -44,11 +102,11 @@ export function timetableEventsOnDate(
     if (slot.room?.trim()) bits.push(`Rm ${slot.room.trim()}`);
 
     out.push({
-      id: `tt-${slot.id}-${iso}`,
+      id: `tt:${slot.id}:${iso}`,
       date: iso,
       start: period.start,
       end: period.end,
-      title: `${school.shortName}: ${className}`,
+      title: className,
       detail: bits.join(" · "),
       kind: "meeting",
       module: period.name,
@@ -58,7 +116,7 @@ export function timetableEventsOnDate(
     });
   }
 
-  return out.sort((a, b) => a.start.localeCompare(b.start));
+  return mergeAdjacentTimetableEvents(out);
 }
 
 /** Expand filled timetable slots across an inclusive date range. */

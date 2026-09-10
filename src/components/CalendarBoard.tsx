@@ -7,7 +7,9 @@ import {
   SOURCE_COLORS,
   schoolSwatch,
 } from "../data/calendarSources";
-import type { PlannerEvent } from "../data/types";
+import { useStore } from "../data/store";
+import { timetableSlotIdsFromEventId } from "../data/timetableEvents";
+import type { EventKind, PlannerEvent } from "../data/types";
 
 export function eventCoversDate(ev: PlannerEvent, iso: string) {
   const end = ev.endDate ?? ev.date;
@@ -50,14 +52,46 @@ const DAY_END_MIN = 18 * 60; // 18:00
 const HOUR_PX = 52;
 const GRID_TOP_PAD = 14;
 
+/** Pack overlapping timed events into side-by-side columns. */
+function layoutTimedEvents(events: PlannerEvent[]) {
+  const items = events
+    .map((event) => {
+      const start = Math.max(
+        parseTimeToMinutes(event.start || "09:00"),
+        DAY_START_MIN,
+      );
+      const endRaw = parseTimeToMinutes(event.end || event.start || "10:00");
+      const end = Math.max(endRaw, start + 30);
+      return { event, start, end };
+    })
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  const colEnds: number[] = [];
+  const placed: { event: PlannerEvent; start: number; end: number; col: number }[] =
+    [];
+
+  for (const item of items) {
+    let col = colEnds.findIndex((end) => end <= item.start);
+    if (col < 0) {
+      col = colEnds.length;
+      colEnds.push(item.end);
+    } else {
+      colEnds[col] = item.end;
+    }
+    placed.push({ ...item, col });
+  }
+
+  return placed.map((p) => {
+    const overlapping = placed.filter((o) => o.start < p.end && o.end > p.start);
+    const colCount = Math.max(...overlapping.map((o) => o.col), p.col) + 1;
+    return { event: p.event, start: p.start, end: p.end, col: p.col, colCount };
+  });
+}
+
 function eventToneClass(ev: PlannerEvent): string {
   if (ev.kind === "deadline" || ev.isAssessment) return "is-deadline";
   if (ev.module === "Break") return "is-break";
   return "is-qts";
-}
-
-function eventHasDetails(ev: PlannerEvent) {
-  return Boolean(ev.detail?.trim());
 }
 
 function eventTimeRangeLabel(ev: PlannerEvent) {
@@ -71,7 +105,21 @@ function eventTimeRangeLabel(ev: PlannerEvent) {
   return `${ev.date} · ${ev.start}`;
 }
 
-function EventDetailPopup({
+type EventMutability = "full" | "timetable" | "homework" | "readonly";
+
+function eventMutability(ev: PlannerEvent): EventMutability {
+  if (ev.id.startsWith("tt:")) return "timetable";
+  if (ev.id.startsWith("hw-")) return "homework";
+  if (ev.id.startsWith("closure-")) return "readonly";
+  if (ev.id.startsWith("evt-")) return "full";
+  return "readonly";
+}
+
+function classNameFromTimetableTitle(title: string) {
+  return title;
+}
+
+export function EventDetailPopup({
   event,
   accent,
   onClose,
@@ -80,6 +128,27 @@ function EventDetailPopup({
   accent: string;
   onClose: () => void;
 }) {
+  const {
+    data,
+    updateEvent,
+    deleteEvent,
+    patchData,
+    deleteHomework,
+  } = useStore();
+  const mode = eventMutability(event);
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(() =>
+    mode === "timetable" ? classNameFromTimetableTitle(event.title) : event.title,
+  );
+  const [date, setDate] = useState(event.date);
+  const [start, setStart] = useState(event.start);
+  const [end, setEnd] = useState(event.end);
+  const [detail, setDetail] = useState(event.detail ?? "");
+  const [kind, setKind] = useState<string>(() =>
+    event.schoolId ? `school:${event.schoolId}` : event.kind,
+  );
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -87,6 +156,93 @@ function EventDetailPopup({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  function saveEdits() {
+    const nextTitle = title.trim();
+    if (!nextTitle) return;
+
+    if (mode === "full") {
+      const schoolMatch = /^school:(.+)$/.exec(kind);
+      const schoolId = schoolMatch?.[1];
+      const school = schoolId
+        ? data.schools.find((s) => s.id === schoolId)
+        : undefined;
+      const nextKind = (school
+        ? "meeting"
+        : kind === "meeting" ||
+            kind === "itap" ||
+            kind === "personal" ||
+            kind === "deadline"
+          ? kind
+          : "meeting") as EventKind;
+      updateEvent(event.id, {
+        title: nextTitle,
+        date,
+        start: start || "09:00",
+        end: end || start || "09:00",
+        detail: detail.trim() || undefined,
+        kind: nextKind,
+        isAssessment: nextKind === "deadline",
+        schoolId: school?.id,
+        source: school ? "school" : nextKind === "itap" ? "qts" : "personal",
+        module: school
+          ? school.shortName || school.name
+          : nextKind === "personal"
+            ? "Break"
+            : event.module ?? "Added by you",
+      });
+      onClose();
+      return;
+    }
+
+    if (mode === "homework") {
+      const hwId = event.id.replace(/^hw-/, "");
+      patchData((prev) => ({
+        ...prev,
+        homework: prev.homework.map((h) =>
+          h.id === hwId
+            ? { ...h, title: nextTitle, dueDate: date || h.dueDate }
+            : h,
+        ),
+      }));
+      onClose();
+      return;
+    }
+
+    if (mode === "timetable") {
+      const slotIds = new Set(timetableSlotIdsFromEventId(event.id));
+      patchData((prev) => ({
+        ...prev,
+        timetable: prev.timetable.map((t) =>
+          slotIds.has(t.id) ? { ...t, className: nextTitle } : t,
+        ),
+      }));
+      onClose();
+    }
+  }
+
+  function removeEvent() {
+    if (mode === "full") {
+      deleteEvent(event.id);
+      onClose();
+      return;
+    }
+    if (mode === "homework") {
+      deleteHomework(event.id.replace(/^hw-/, ""));
+      onClose();
+      return;
+    }
+    if (mode === "timetable") {
+      const slotIds = new Set(timetableSlotIdsFromEventId(event.id));
+      patchData((prev) => ({
+        ...prev,
+        timetable: prev.timetable.map((t) =>
+          slotIds.has(t.id) ? { ...t, className: "" } : t,
+        ),
+      }));
+      onClose();
+    }
+  }
 
   return (
     <div
@@ -104,7 +260,13 @@ function EventDetailPopup({
       >
         <div className="gcal-popup-accent" aria-hidden />
         <header className="gcal-popup-head">
-          <h3 id="gcal-popup-title">{event.title}</h3>
+          <h3 id="gcal-popup-title">
+            {editing
+              ? mode === "timetable"
+                ? "Edit class"
+                : "Edit event"
+              : event.title}
+          </h3>
           <button
             type="button"
             className="btn gcal-popup-close"
@@ -114,20 +276,128 @@ function EventDetailPopup({
             ✕
           </button>
         </header>
-        <p className="gcal-popup-time">{eventTimeRangeLabel(event)}</p>
-        {event.detail?.trim() ? (
-          <div className="gcal-popup-body">
-            <p className="gcal-popup-label">Notes</p>
-            <p className="gcal-popup-notes">{event.detail}</p>
+
+        {editing ? (
+          <div className="gcal-popup-form">
+            <label>
+              {mode === "timetable" ? "Class" : "Title"}
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                required
+              />
+            </label>
+            {mode === "full" || mode === "homework" ? (
+              <label>
+                Date
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
+              </label>
+            ) : null}
+            {mode === "full" ? (
+              <>
+                <div className="gcal-popup-form-row">
+                  <label>
+                    Start
+                    <input
+                      type="time"
+                      value={start}
+                      onChange={(e) => setStart(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    End
+                    <input
+                      type="time"
+                      value={end}
+                      onChange={(e) => setEnd(e.target.value)}
+                    />
+                  </label>
+                </div>
+                <label>
+                  Type
+                  <select
+                    value={kind}
+                    onChange={(e) => setKind(e.target.value)}
+                  >
+                    <option value="deadline">Deadline</option>
+                    <option value="meeting">Meeting</option>
+                    <option value="itap">Training / ITAP</option>
+                    <option value="personal">Break / personal</option>
+                    {data.schools.map((s) => (
+                      <option key={s.id} value={`school:${s.id}`}>
+                        {s.shortName || s.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Notes
+                  <textarea
+                    rows={3}
+                    value={detail}
+                    onChange={(e) => setDetail(e.target.value)}
+                  />
+                </label>
+              </>
+            ) : null}
+            <div className="gcal-popup-actions">
+              <button type="button" className="btn" onClick={() => setEditing(false)}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-primary" onClick={saveEdits}>
+                Save
+              </button>
+            </div>
           </div>
-        ) : null}
-        {event.link ? (
-          <p className="gcal-popup-link">
-            <a href={event.link} target="_blank" rel="noreferrer">
-              Open link
-            </a>
-          </p>
-        ) : null}
+        ) : (
+          <>
+            <p className="gcal-popup-time">{eventTimeRangeLabel(event)}</p>
+            {event.detail?.trim() ? (
+              <div className="gcal-popup-body">
+                <p className="gcal-popup-label">Notes</p>
+                <p className="gcal-popup-notes">{event.detail}</p>
+              </div>
+            ) : null}
+            {event.link ? (
+              <p className="gcal-popup-link">
+                <a href={event.link} target="_blank" rel="noreferrer">
+                  Open link
+                </a>
+              </p>
+            ) : null}
+            {mode === "readonly" ? (
+              <p className="gcal-popup-readonly">
+                Programme / school closure events can&apos;t be edited here.
+              </p>
+            ) : confirmDelete ? (
+              <div className="gcal-popup-actions">
+                <button type="button" className="btn" onClick={() => setConfirmDelete(false)}>
+                  Keep
+                </button>
+                <button type="button" className="btn btn-peach" onClick={removeEvent}>
+                  Confirm delete
+                </button>
+              </div>
+            ) : (
+              <div className="gcal-popup-actions">
+                <button type="button" className="btn" onClick={() => setEditing(true)}>
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-peach"
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
@@ -326,7 +596,6 @@ function WeekTimeGrid({
 
   function openEvent(ev: PlannerEvent, e: MouseEvent) {
     e.stopPropagation();
-    if (!eventHasDetails(ev)) return;
     setActiveEvent(ev);
   }
 
@@ -377,36 +646,21 @@ function WeekTimeGrid({
               return (
                 <div key={iso} className="gcal-allday-cell">
                   {allDay.map((ev) => {
-                    const clickable = eventHasDetails(ev);
-                    const className = `gcal-allday-pill ${eventToneClass(ev)}${
-                      clickable ? " is-clickable" : ""
-                    }`;
+                    const className = `gcal-allday-pill ${eventToneClass(ev)} is-clickable`;
                     const style = {
                       ["--gcal-accent" as string]: eventAccent(ev, schoolIndex),
                     };
-                    if (clickable) {
-                      return (
-                        <button
-                          key={ev.id}
-                          type="button"
-                          className={className}
-                          style={style}
-                          title={ev.title}
-                          onClick={(e) => openEvent(ev, e)}
-                        >
-                          {ev.title}
-                        </button>
-                      );
-                    }
                     return (
-                      <div
+                      <button
                         key={ev.id}
+                        type="button"
                         className={className}
                         style={style}
                         title={ev.title}
+                        onClick={(e) => openEvent(ev, e)}
                       >
                         {ev.title}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -458,62 +712,44 @@ function WeekTimeGrid({
                     <span className="gcal-now-dot" />
                   </div>
                 ) : null}
-                {timed.map((ev) => {
-                  const start = Math.max(
-                    parseTimeToMinutes(ev.start || "09:00"),
-                    DAY_START_MIN,
-                  );
-                  const endRaw = parseTimeToMinutes(ev.end || ev.start || "10:00");
-                  const end = Math.max(endRaw, start + 30);
+                {layoutTimedEvents(timed).map(
+                  ({ event: ev, start, end, col, colCount }) => {
                   const top =
                     GRID_TOP_PAD + ((start - DAY_START_MIN) / 60) * HOUR_PX + 1;
                   const height = Math.max(
                     ((Math.min(end, DAY_END_MIN) - start) / 60) * HOUR_PX - 3,
                     20,
                   );
-                  const clickable = eventHasDetails(ev);
-                  const className = `gcal-event-block ${eventToneClass(ev)}${
-                    clickable ? " is-clickable" : ""
-                  }`;
+                  const gap = 2;
+                  const leftPct = (col / colCount) * 100;
+                  const widthPct = 100 / colCount;
+                  const className = `gcal-event-block ${eventToneClass(ev)} is-clickable`;
                   const style = {
                     top,
                     height,
+                    left: `calc(${leftPct}% + ${gap}px)`,
+                    width: `calc(${widthPct}% - ${gap * 2}px)`,
+                    right: "auto",
                     ["--gcal-accent" as string]: eventAccent(ev, schoolIndex),
                   };
-                  const inner = (
-                    <>
+                  return (
+                    <button
+                      key={ev.id}
+                      type="button"
+                      className={className}
+                      style={style}
+                      title={`${ev.start}–${ev.end} ${ev.title}`}
+                      onClick={(e) => openEvent(ev, e)}
+                    >
                       <strong>{ev.title}</strong>
                       <span>
                         {ev.start}
                         {ev.end && ev.end !== ev.start ? `–${ev.end}` : ""}
                       </span>
-                    </>
+                    </button>
                   );
-                  if (clickable) {
-                    return (
-                      <button
-                        key={ev.id}
-                        type="button"
-                        className={className}
-                        style={style}
-                        title={`${ev.start}–${ev.end} ${ev.title}`}
-                        onClick={(e) => openEvent(ev, e)}
-                      >
-                        {inner}
-                      </button>
-                    );
-                  }
-                  return (
-                    <div
-                      key={ev.id}
-                      className={className}
-                      style={style}
-                      title={`${ev.start}–${ev.end} ${ev.title}`}
-                    >
-                      {inner}
-                    </div>
-                  );
-                })}
+                },
+                )}
               </div>
             );
           })}

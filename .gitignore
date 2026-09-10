@@ -30,3 +30,5 @@ dist-ssr
 .vercel
 .env*
 hehe
+
+tmp_old_qts

@@ -76,6 +76,8 @@ type StoreApi = {
   updateTask: (id: string, patchData: Partial<TaskItem>) => void;
   deleteTask: (id: string) => void;
   addEvent: (input: Omit<PlannerEvent, "id">) => void;
+  updateEvent: (id: string, patchData: Partial<PlannerEvent>) => void;
+  deleteEvent: (id: string) => void;
   addAssessment: (
     input: Omit<AssessmentItem, "id" | "done"> & { done?: boolean },
   ) => void;
@@ -396,6 +398,31 @@ export function DataProvider({
           (a, b) =>
             a.date.localeCompare(b.date) || a.start.localeCompare(b.start),
         ),
+      }));
+    },
+    [patch],
+  );
+
+  const updateEvent = useCallback(
+    (id: string, patchData: Partial<PlannerEvent>) => {
+      patch((prev) => ({
+        ...prev,
+        events: prev.events
+          .map((e) => (e.id === id ? { ...e, ...patchData, id: e.id } : e))
+          .sort(
+            (a, b) =>
+              a.date.localeCompare(b.date) || a.start.localeCompare(b.start),
+          ),
+      }));
+    },
+    [patch],
+  );
+
+  const deleteEvent = useCallback(
+    (id: string) => {
+      patch((prev) => ({
+        ...prev,
+        events: prev.events.filter((e) => e.id !== id),
       }));
     },
     [patch],
@@ -920,6 +947,8 @@ export function DataProvider({
       updateTask,
       deleteTask,
       addEvent,
+      updateEvent,
+      deleteEvent,
       addAssessment,
       updateAssessment,
       deleteAssessment,
@@ -970,6 +999,8 @@ export function DataProvider({
       updateTask,
       deleteTask,
       addEvent,
+      updateEvent,
+      deleteEvent,
       addAssessment,
       updateAssessment,
       deleteAssessment,

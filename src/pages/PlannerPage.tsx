@@ -422,6 +422,10 @@ export function PlannerPage() {
               { value: "meeting", label: "Meeting" },
               { value: "itap", label: "Training / ITAP" },
               { value: "personal", label: "Break / personal" },
+              ...data.schools.map((s) => ({
+                value: `school:${s.id}`,
+                label: s.shortName || s.name,
+              })),
             ],
           },
           {
@@ -445,8 +449,15 @@ export function PlannerPage() {
         ]}
         onClose={() => setAddOpen(false)}
         onSubmit={(v) => {
-          const kindVal = (v.kind || "deadline") as EventKind;
-          const isBreak = kindVal === "personal";
+          const schoolMatch = /^school:(.+)$/.exec(v.kind || "");
+          const schoolId = schoolMatch?.[1];
+          const school = schoolId
+            ? data.schools.find((s) => s.id === schoolId)
+            : undefined;
+          const kindVal = school
+            ? ("meeting" as EventKind)
+            : ((v.kind || "deadline") as EventKind);
+          const isBreak = kindVal === "personal" && !school;
           addEvent({
             date: v.date,
             endDate: v.endDate || undefined,
@@ -457,10 +468,15 @@ export function PlannerPage() {
             kind: kindVal,
             track: "all",
             isAssessment: kindVal === "deadline",
-            module: isBreak ? "Break" : "Added by you",
+            module: school
+              ? school.shortName || school.name
+              : isBreak
+                ? "Break"
+                : "Added by you",
             link: v.link || undefined,
             linkedMeetingId: v.linkedMeetingId || undefined,
-            source: "personal",
+            schoolId: school?.id,
+            source: school ? "school" : kindVal === "itap" ? "qts" : "personal",
           });
         }}
       />

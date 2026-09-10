@@ -2362,7 +2362,8 @@ input[type="file"] {
 .gcal-event-block {
   position: absolute;
   left: 3px;
-  right: 3px;
+  width: calc(100% - 6px);
+  right: auto;
   z-index: 2;
   border-radius: 4px;
   padding: 0.2rem 0.35rem;
@@ -2380,14 +2381,18 @@ input[type="file"] {
 .gcal-event-block strong {
   display: block;
   font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .gcal-event-block span {
+  display: block;
   color: var(--ink-soft);
   font-size: 0.62rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .gcal-event-block.is-deadline {
@@ -2539,6 +2544,71 @@ input[type="file"] {
 
 .gcal-popup-link a {
   color: var(--planner-teal-deep);
+}
+
+.gcal-popup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.gcal-popup-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.gcal-popup-form input,
+.gcal-popup-form textarea,
+.gcal-popup-form select {
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--ink);
+  border: 1px solid var(--planner-line);
+  border-radius: 4px;
+  padding: 0.45rem 0.55rem;
+  background: #fff;
+}
+
+.gcal-popup-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+}
+
+.gcal-popup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.85rem;
+}
+
+.gcal-popup-readonly {
+  margin: 0.75rem 0 0;
+  font-size: 0.82rem;
+  color: var(--ink-faint);
+}
+
+.hub-day-event {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  display: grid;
+}
+
+.hub-day-event:hover {
+  background: rgba(122, 185, 182, 0.08);
 }
 
 .hub-cal-legend {

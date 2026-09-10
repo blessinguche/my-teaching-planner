@@ -3,6 +3,7 @@ import { AddDialog } from "../components/AddDialog";
 import {
   CalendarBoard,
   cursorLabel,
+  EventDetailPopup,
   eventsForDate,
   shiftCursor,
 } from "../components/CalendarBoard";
@@ -27,11 +28,21 @@ function eventTimeLabel(ev: PlannerEvent) {
   return ev.start;
 }
 
+function eventAccentForHub(
+  ev: PlannerEvent,
+  schoolIndex: Map<string, number>,
+): string {
+  if (ev.kind === "deadline" || ev.isAssessment) return SOURCE_COLORS.deadlines;
+  if (ev.schoolId) return schoolSwatch(schoolIndex.get(ev.schoolId) ?? 0);
+  return SOURCE_COLORS.qts;
+}
+
 export function HubHomePage() {
   const { data, addEvent } = useStore();
   const today = todayISO();
   const [cursor, setCursor] = useState(today);
   const [addOpen, setAddOpen] = useState(false);
+  const [activeEvent, setActiveEvent] = useState<PlannerEvent | null>(null);
 
   const schoolIndex = useMemo(() => {
     const map = new Map<string, number>();
@@ -181,10 +192,12 @@ export function HubHomePage() {
                 ? hubEvents.find((m) => m.id === ev.linkedMeetingId)
                 : undefined;
               return (
-                <div
+                <button
                   key={ev.id}
-                  className="planner-row"
-                  style={{ gridTemplateColumns: "18% 1fr" }}
+                  type="button"
+                  className="planner-row hub-day-event"
+                  style={{ gridTemplateColumns: "18% 1fr", width: "100%", textAlign: "left" }}
+                  onClick={() => setActiveEvent(ev)}
                 >
                   <div className="planner-label-cell">{eventTimeLabel(ev)}</div>
                   <div className="planner-cell" style={{ padding: "0.4rem 0.55rem" }}>
@@ -197,18 +210,31 @@ export function HubHomePage() {
                     ) : null}
                     {ev.link ? (
                       <p className="hint">
-                        <a href={ev.link} target="_blank" rel="noreferrer">
+                        <a
+                          href={ev.link}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           Open link
                         </a>
                       </p>
                     ) : null}
                   </div>
-                </div>
+                </button>
               );
             })
           )}
         </div>
       </Sheet>
+
+      {activeEvent ? (
+        <EventDetailPopup
+          event={activeEvent}
+          accent={eventAccentForHub(activeEvent, schoolIndex)}
+          onClose={() => setActiveEvent(null)}
+        />
+      ) : null}
 
       {primarySchool ? (
         <p className="hint" style={{ marginTop: "1rem" }}>
@@ -231,6 +257,12 @@ export function HubHomePage() {
             options: [
               { value: "deadline", label: "Deadline" },
               { value: "meeting", label: "Meeting" },
+              { value: "itap", label: "Training / ITAP" },
+              { value: "personal", label: "Personal" },
+              ...data.schools.map((s) => ({
+                value: `school:${s.id}`,
+                label: s.shortName || s.name,
+              })),
             ],
           },
           { name: "link", label: "Link (optional)", placeholder: "https://…" },
@@ -238,7 +270,17 @@ export function HubHomePage() {
         ]}
         onClose={() => setAddOpen(false)}
         onSubmit={(v) => {
-          const kind = v.kind === "meeting" ? "meeting" : "deadline";
+          const schoolMatch = /^school:(.+)$/.exec(v.kind || "");
+          const schoolId = schoolMatch?.[1];
+          const school = schoolId
+            ? data.schools.find((s) => s.id === schoolId)
+            : undefined;
+          const kind =
+            schoolId
+              ? "meeting"
+              : v.kind === "meeting" || v.kind === "itap" || v.kind === "personal"
+                ? v.kind
+                : "deadline";
           addEvent({
             date: v.date,
             start: v.start || "09:00",
@@ -248,9 +290,12 @@ export function HubHomePage() {
             kind,
             isAssessment: kind === "deadline",
             track: "all",
-            module: "Added by you",
+            module: school
+              ? school.shortName || school.name
+              : "Added by you",
             link: v.link || undefined,
-            source: "personal",
+            schoolId: school?.id,
+            source: school ? "school" : kind === "itap" ? "qts" : "personal",
           });
         }}
       />

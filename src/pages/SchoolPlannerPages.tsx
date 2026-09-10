@@ -1250,7 +1250,7 @@ export function SchoolCalendarSpreadPage() {
                           ) : null}
                           {events.map((e) => (
                             <div key={e.id} className="month-event-line">
-                              {e.title.replace(`${school.shortName}: `, "")}
+                              {e.title}
                             </div>
                           ))}
                         </div>
