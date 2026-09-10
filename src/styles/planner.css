@@ -329,16 +329,25 @@
   text-align: center;
 }
 
-.schools-table-cell {
-  padding: 0.5rem 0.65rem;
-  justify-content: center;
+.schools-table .planner-cell.schools-table-cell {
+  padding: 0.65rem 0.85rem;
+  justify-content: flex-start;
   box-sizing: border-box;
+}
+
+.schools-table .planner-cell.schools-table-cell strong {
+  display: block;
+  margin: 0;
+}
+
+.schools-table .planner-cell.schools-table-cell .hint {
+  margin: 0.25rem 0 0;
 }
 
 .schools-table-action {
   align-items: center;
   justify-content: center;
-  padding: 0.4rem 0.5rem;
+  padding: 0.5rem 0.65rem;
 }
 
 .schools-table-action .btn {
