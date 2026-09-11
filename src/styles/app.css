@@ -1194,6 +1194,9 @@ input[type="file"] {
   gap: 0;
   padding: 0.85rem 1rem;
   overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   transition: box-shadow 0.25s var(--ease), border-color 0.25s ease;
 }
 
@@ -1258,7 +1261,35 @@ input[type="file"] {
 
 .capture-inline-grid {
   border: 1px solid var(--planner-line) !important;
-  overflow: hidden;
+  overflow: visible;
+  width: 100%;
+  max-width: none;
+}
+
+.capture-field-block {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border-bottom: 1px solid var(--planner-line);
+}
+
+.capture-field-block:last-child {
+  border-bottom: none;
+}
+
+.capture-field-block .planner-label-cell {
+  width: 100%;
+  border-right: none;
+  border-bottom: 1px solid var(--planner-line);
+  background: #f3f8f7;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 0.45rem 0.65rem;
+}
+
+.capture-field-block .capture-compose-cell {
+  width: 100%;
+  padding: 0;
 }
 
 .capture-inline-grid .planner-row {
@@ -1277,11 +1308,16 @@ input[type="file"] {
 }
 
 .capture-inline-textarea {
-  min-height: 5.5rem !important;
+  width: 100%;
+  min-height: 9rem !important;
+  max-height: none;
   resize: vertical;
   line-height: 1.5 !important;
   font-family: var(--font-write);
   padding: 0.65rem 0.75rem !important;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  box-sizing: border-box;
 }
 
 .capture-expand-actions {

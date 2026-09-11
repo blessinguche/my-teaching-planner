@@ -221,15 +221,54 @@ export type TimetableSlot = {
   subject?: string;
 };
 
+export type LessonSequencePhase =
+  | "entrance"
+  | "introduction"
+  | "input"
+  | "checkpoint"
+  | "plenary"
+  | "other";
+
+export type LessonSequenceRow = {
+  id: string;
+  phase: LessonSequencePhase;
+  /** Optional section heading shown above the row (e.g. Entrance / Plenary). */
+  heading?: string;
+  time: string;
+  teacher: string;
+  learners: string;
+};
+
+/** NIoT ITE lesson plan proforma (Part I overview + Part II sequence). */
 export type LessonPlan = {
   id: string;
   schoolId: string;
+  /** Part I — overview */
+  teacher: string;
   date: string;
-  periodId?: string;
-  className?: string;
+  teachingGroup: string;
   title: string;
-  objectives?: string;
-  notes?: string;
+  objectives: string;
+  /** What previous learning to revisit */
+  review: string;
+  /** Q1 Where are the learners starting from? */
+  startingFrom: string;
+  /** Q2 Where do I want them to get to? */
+  endGoal: string;
+  /** Q3 Core knowledge */
+  coreKnowledge: string;
+  /** Q3 Checkpoint check */
+  checkpointCheck: string;
+  /** Q4 Likely misconception(s) */
+  misconceptions: string;
+  /** Q4 How I will find misconceptions */
+  findMisconceptions: string;
+  /** Q5 Tier 2/3 vocabulary */
+  vocabulary: string;
+  /** Mentor meeting action step(s) */
+  mentorFocus: string;
+  /** Part II — lesson sequence rows */
+  sequence: LessonSequenceRow[];
 };
 
 /** Placement planner — teacher focus / weekly / meetings extras */
@@ -317,7 +356,7 @@ export type WeeklyPlan = {
 export type MeetingNote = {
   id: string;
   schoolId: string;
-  kind: "mentor" | "observed" | "observing" | "training";
+  kind: "mentor" | "observed" | "observing" | "training" | "others";
   date: string;
   observed: string;
   focus: string;
@@ -331,6 +370,55 @@ export type MeetingNote = {
   body: string;
   /** Mentor sheet — next meeting date */
   nextMeetingDate?: string;
+  /** Observation of others — NIoT proforma fields */
+  topic?: string;
+  focusArea1?: string;
+  strategies1?: string;
+  outcomes1?: string;
+  comments1?: string;
+  focusArea2?: string;
+  strategies2?: string;
+  outcomes2?: string;
+  comments2?: string;
+};
+
+/** Weekly Trainee Progress Record (NIoT TPR). */
+export type TraineeProgressRecord = {
+  id: string;
+  schoolId: string;
+  /** e.g. Term 1: Week 2 following Thu 10th September */
+  weekLabel: string;
+  date: string;
+  /** Linked lesson plan used for Part I / II export */
+  lessonPlanId?: string;
+  formalLessonPlanReady: string;
+  strengthSC: string;
+  strengthPT: string;
+  strengthKYL: string;
+  strengthBR: string;
+  strengthMC: string;
+  strengthART: string;
+  strengthPB: string;
+  strengthEC: string;
+  keyDevelopmentPoints: string;
+  weeklyReviewDrawingUpon: string;
+  weeklyReviewFurtherProgress: string;
+  wellbeingCheckDone: string;
+  centreActionMet: string;
+  centreActionEvidence: string;
+  mentorActionMet: string;
+  mentorActionEvidence: string;
+  notMetReasons: string;
+  daysAbsent: string;
+  absenceReasons: string;
+  absenceStart: string;
+  absenceEnd: string;
+  absenceOther: string;
+  trainingConversationNotes: string;
+  centreActionStep1: string;
+  centreActionStep2: string;
+  mentorLedConversationDone: string;
+  curriculumTaskDone: string;
 };
 
 export type SeatingCell = {
@@ -518,4 +606,5 @@ export type AppData = {
   placementOverviews: PlacementOverview[];
   calendarWeekNotes: CalendarWeekNote[];
   classroomPracticeNotes: ClassroomPracticeNote[];
+  traineeProgressRecords: TraineeProgressRecord[];
 };

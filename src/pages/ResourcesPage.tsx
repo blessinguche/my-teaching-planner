@@ -10,6 +10,13 @@ import {
 import { useStore } from "../data/store";
 import type { ResourceLink } from "../data/types";
 
+function stripHtml(value: string) {
+  if (!value) return "";
+  if (!/[<>]/.test(value)) return value;
+  const doc = new DOMParser().parseFromString(value, "text/html");
+  return (doc.body.textContent || "").replace(/\u00a0/g, " ").trim();
+}
+
 const labels = {
   qts: "QTS",
   computing: "Computing",
@@ -89,14 +96,14 @@ export function ResourcesPage() {
                   tabIndex={0}
                 >
                   <h3>{r.name}</h3>
-                  <p className="muted">{r.description}</p>
+                  <p className="muted">{stripHtml(r.description)}</p>
                   {r.file ? (
                     <p className="hint">
                       📎 {r.file.name} · {formatFileSize(r.file.size)}
                     </p>
                   ) : null}
                   {r.notes ? (
-                    <p className="hint notes-preview">{r.notes}</p>
+                    <p className="hint notes-preview">{stripHtml(r.notes)}</p>
                   ) : null}
                   <div
                     className="resource-actions"
@@ -151,8 +158,8 @@ export function ResourcesPage() {
             hint: fileHint,
           },
           { ...categoryField },
-          { name: "description", label: "Description", type: "textarea" },
-          { name: "notes", label: "Notes", type: "textarea" },
+          { name: "description", label: "Description", type: "plain" },
+          { name: "notes", label: "Notes", type: "plain" },
         ]}
         onClose={() => setAddOpen(false)}
         onSubmit={async (v, files) => {
@@ -175,8 +182,8 @@ export function ResourcesPage() {
             url: v.url || undefined,
             file,
             category: (v.category || "other") as ResourceLink["category"],
-            description: v.description,
-            notes: v.notes,
+            description: stripHtml(v.description),
+            notes: stripHtml(v.notes),
           });
         }}
       />
@@ -218,14 +225,14 @@ export function ResourcesPage() {
           {
             name: "description",
             label: "Description",
-            type: "textarea",
-            defaultValue: editing?.description,
+            type: "plain",
+            defaultValue: stripHtml(editing?.description ?? ""),
           },
           {
             name: "notes",
             label: "Notes",
-            type: "textarea",
-            defaultValue: editing?.notes ?? "",
+            type: "plain",
+            defaultValue: stripHtml(editing?.notes ?? ""),
           },
           ...(editing?.file
             ? [
@@ -285,8 +292,8 @@ export function ResourcesPage() {
             file: nextFile,
             localPath: nextFile ? undefined : editing.localPath,
             category: v.category as ResourceLink["category"],
-            description: v.description || "",
-            notes: v.notes || "",
+            description: stripHtml(v.description || ""),
+            notes: stripHtml(v.notes || ""),
           });
         }}
       />

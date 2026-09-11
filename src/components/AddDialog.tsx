@@ -32,6 +32,15 @@ type Field =
   | {
       name: string;
       label: string;
+      type: "plain";
+      required?: boolean;
+      placeholder?: string;
+      defaultValue?: string;
+      hint?: string;
+    }
+  | {
+      name: string;
+      label: string;
       type: "file";
       required?: boolean;
       accept?: string;
@@ -192,6 +201,15 @@ export function AddDialog({
                   placeholder={field.placeholder}
                   defaultValue={field.defaultValue}
                   disabled={busy}
+                />
+              ) : field.type === "plain" ? (
+                <textarea
+                  name={field.name}
+                  required={field.required}
+                  placeholder={field.placeholder}
+                  defaultValue={field.defaultValue}
+                  disabled={busy}
+                  rows={4}
                 />
               ) : field.type === "student" ? (
                 <StudentPicker

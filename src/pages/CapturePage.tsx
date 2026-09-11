@@ -505,10 +505,7 @@ export function CapturePage() {
                           ) : null}
 
                           <div className="planner-grid joined capture-inline-grid">
-                            <div
-                              className="planner-row"
-                              style={{ gridTemplateColumns: "7.5rem 1fr" }}
-                            >
+                            <div className="capture-field-block">
                               <div className="planner-label-cell">Title</div>
                               <div className="planner-cell capture-compose-cell">
                                 <input
@@ -519,15 +516,12 @@ export function CapturePage() {
                                 />
                               </div>
                             </div>
-                            <div
-                              className="planner-row"
-                              style={{ gridTemplateColumns: "7.5rem 1fr" }}
-                            >
+                            <div className="capture-field-block">
                               <div className="planner-label-cell">Notes</div>
                               <div className="planner-cell capture-compose-cell">
                                 <textarea
                                   className="planner-input capture-inline-textarea"
-                                  rows={4}
+                                  rows={6}
                                   value={expanded ? draftBody : c.body}
                                   onChange={(e) => setDraftBody(e.target.value)}
                                   disabled={!expanded}
@@ -535,15 +529,12 @@ export function CapturePage() {
                                 />
                               </div>
                             </div>
-                            <div
-                              className="planner-row"
-                              style={{ gridTemplateColumns: "7.5rem 1fr" }}
-                            >
+                            <div className="capture-field-block">
                               <div className="planner-label-cell">Transcript</div>
                               <div className="planner-cell capture-compose-cell">
                                 <textarea
                                   className="planner-input capture-inline-textarea"
-                                  rows={5}
+                                  rows={8}
                                   value={
                                     expanded
                                       ? draftTranscript

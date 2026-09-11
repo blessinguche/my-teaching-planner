@@ -16,6 +16,7 @@ export function SchoolShell() {
   const links: NavItem[] = [
     { to: base, label: "Home", end: true, icon: icons.home },
     { to: `${base}/timetable`, label: "Times", icon: icons.timetable },
+    { to: `${base}/tpr`, label: "TPR", icon: icons.todo },
     { to: `${base}/notes`, label: "Notes", icon: icons.comms },
     { to: `${base}/focus`, label: "Focus", icon: icons.qts },
     { to: `${base}/calendar`, label: "Cal", icon: icons.cal },

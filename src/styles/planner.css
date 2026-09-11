@@ -138,11 +138,11 @@
 .planner-section-title {
   display: inline-block;
   font-family: var(--font-display);
-  font-size: 1.05rem;
-  font-weight: 600;
+  font-size: clamp(1.1rem, 1.8vw, 1.3rem);
+  font-weight: 500;
   color: var(--planner-teal-deep);
   background: var(--planner-teal-soft);
-  padding: 0.22rem 0.75rem;
+  padding: 0.28rem 0.85rem;
   border-radius: 999px;
   margin: 0 0 0.35rem;
 }
@@ -150,11 +150,11 @@
 .planner-heading {
   display: inline-block;
   font-family: var(--font-display);
-  font-size: clamp(1.05rem, 1.45vw, 1.25rem);
-  font-weight: 600;
+  font-size: clamp(1.15rem, 2vw, 1.35rem);
+  font-weight: 500;
   color: var(--planner-teal-deep);
   background: var(--planner-teal-soft);
-  padding: 0.28rem 0.8rem;
+  padding: 0.32rem 0.9rem;
   border-radius: 999px;
   margin: 0 0 0.3rem;
 }
@@ -254,6 +254,11 @@
   border-radius: 2px;
 }
 
+.planner-banner.soft {
+  background: #eef5f4;
+  color: var(--planner-teal-deep, #2f5f5c);
+}
+
 .planner-bar {
   display: grid;
   background: var(--planner-teal);
@@ -298,7 +303,518 @@
   border: none;
 }
 
-/* Schools list: shared column tracks so header lines up with rows */
+/* Lesson plan pro-forma */
+.lesson-plan-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-bottom: 0.35rem;
+}
+
+.lesson-plan-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.75rem;
+}
+
+.lesson-plan-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--planner-line);
+  background: #fff;
+  color: var(--ink);
+  font-family: var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.lesson-plan-chip strong {
+  font-size: 0.88rem;
+}
+
+.lesson-plan-chip span {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}
+
+.lesson-plan-chip.is-active {
+  border-color: var(--planner-teal);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--planner-teal) 40%, transparent);
+}
+
+.lesson-plan-sheet {
+  width: 100%;
+}
+
+.lesson-plan-sheet-wrap {
+  width: 100%;
+  min-width: 0;
+}
+
+.lesson-plan-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.lesson-plan-form .planner-heading {
+  margin: 0.35rem 0 0.15rem;
+}
+
+.lesson-plan-form .planner-heading + .niot-section,
+.lesson-plan-form .planner-heading + .niot-part-lede {
+  margin-top: 0.15rem;
+}
+
+.niot-part-lede {
+  margin: -0.25rem 0 0;
+  padding: 0;
+  font-family: var(--font-write);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+
+.niot-section {
+  border: 1px solid var(--planner-line);
+  background: #fff;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.niot-section > .planner-grid,
+.niot-section > .niot-sequence-grid {
+  border: none;
+}
+
+.niot-section-title {
+  margin: 0;
+  padding: 0.55rem 0.85rem;
+  border: none;
+  border-bottom: 1px solid var(--planner-line);
+  background: #eef5f4;
+  color: var(--planner-teal-deep, #2f5f5c);
+  font-family: var(--font-display);
+  font-size: clamp(1.15rem, 2vw, 1.35rem);
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.niot-section > .planner-input,
+.niot-q > .planner-input,
+.niot-split .planner-input {
+  padding: 0.45rem 0.65rem;
+}
+
+.niot-prompt {
+  margin: 0;
+  padding: 0.55rem 0.75rem 0.3rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.niot-q {
+  border-top: 1px solid var(--planner-line);
+}
+
+.niot-q:first-of-type {
+  border-top: none;
+}
+
+/* Weekly TPR — document-like boxes & tables */
+.tpr-sheet .tpr-meta-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 0.8fr;
+  border-bottom: 1px solid var(--planner-line);
+}
+
+.tpr-sheet .tpr-meta-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid var(--planner-line);
+  border-bottom: 1px solid var(--planner-line);
+}
+
+.tpr-sheet .tpr-meta-cell:nth-child(2n) {
+  border-right: none;
+}
+
+.tpr-sheet .tpr-meta-span {
+  grid-column: 1 / -1;
+  border-right: none;
+}
+
+.tpr-sheet .tpr-meta-label,
+.tpr-sheet .tpr-table-head,
+.tpr-sheet .tpr-box > .planner-label-cell {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  background: #f7faf9;
+}
+
+.tpr-sheet .tpr-strand,
+.tpr-sheet .tpr-points,
+.tpr-sheet .tpr-yn-label,
+.tpr-sheet .tpr-table-note {
+  font-family: var(--font-body);
+  font-weight: 500;
+  color: var(--ink);
+  background: transparent;
+}
+
+.tpr-sheet .tpr-meta-label {
+  display: block;
+  padding: 0.35rem 0.65rem;
+  border-bottom: 1px solid var(--planner-line);
+}
+
+.tpr-sheet .tpr-meta-cell > .planner-input,
+.tpr-sheet .tpr-meta-cell > .planner-select {
+  border: none;
+  border-radius: 0;
+  min-height: 2.4rem;
+}
+
+.tpr-sheet .tpr-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.tpr-sheet .tpr-table-note {
+  margin: 0;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid var(--planner-line);
+  font-family: var(--font-write);
+  font-size: 0.88rem;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  background: #fafcfc;
+}
+
+.tpr-sheet .tpr-table-head,
+.tpr-sheet .tpr-table-row {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.9fr) minmax(0, 1.6fr);
+  border-bottom: 1px solid var(--planner-line);
+  align-items: stretch;
+}
+
+.tpr-sheet .tpr-strengths-table .tpr-table-head,
+.tpr-sheet .tpr-strengths-table .tpr-table-row {
+  grid-template-columns: minmax(5.25rem, 0.32fr) minmax(8.5rem, 0.78fr) minmax(0, 1.55fr);
+}
+
+.tpr-sheet .tpr-table-head {
+  padding: 0;
+}
+
+.tpr-sheet .tpr-table-head > span {
+  padding: 0.45rem 0.55rem;
+  border-right: 1px solid var(--planner-line);
+  line-height: 1.35;
+  background: #f7faf9;
+}
+
+.tpr-sheet .tpr-table-head > span > em {
+  display: block;
+  font-style: normal;
+  font-family: var(--font-write);
+  font-weight: 400;
+  font-size: 0.78rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-soft);
+  margin-top: 0.15rem;
+}
+
+.tpr-sheet .tpr-table-head > span:last-child {
+  border-right: none;
+}
+
+.tpr-sheet .tpr-strand {
+  padding: 0.5rem 0.55rem;
+  border-right: 1px solid var(--planner-line);
+  display: flex;
+  align-items: flex-start;
+  line-height: 1.35;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: #f7faf9;
+}
+
+.tpr-sheet .tpr-points {
+  padding: 0.5rem 0.55rem;
+  border-right: 1px solid var(--planner-line);
+  white-space: pre-line;
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--ink-soft);
+  background: #fff;
+}
+
+.tpr-sheet .tpr-strengths-table .tpr-table-row > .planner-input {
+  border: none;
+  border-radius: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  align-self: stretch;
+  resize: vertical;
+  box-sizing: border-box;
+  font-size: 0.95rem;
+}
+
+.tpr-sheet .tpr-strengths-table .tpr-strength-cell {
+  position: relative;
+  min-height: 4.5rem;
+  min-width: 0;
+}
+
+.tpr-sheet .tpr-strengths-table .tpr-strength-cell > .planner-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  border: none;
+  border-radius: 0;
+  resize: none;
+  overflow: auto;
+  box-sizing: border-box;
+  font-size: 0.95rem;
+  field-sizing: fixed;
+}
+
+.tpr-sheet .tpr-table-row > .planner-input {
+  border: none;
+  border-radius: 0;
+  min-height: 3.2rem;
+  font-size: 0.95rem;
+}
+
+.tpr-sheet .tpr-box {
+  border-top: 1px solid var(--planner-line);
+  display: flex;
+  flex-direction: column;
+}
+
+.tpr-sheet .tpr-box > .planner-label-cell {
+  border-bottom: 1px solid var(--planner-line);
+}
+
+.tpr-sheet .tpr-box > .planner-input {
+  border: none;
+  border-radius: 0;
+}
+
+.tpr-sheet .tpr-yn-block {
+  border-top: 1px solid var(--planner-line);
+}
+
+.tpr-sheet .tpr-yn-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.45rem 0.65rem;
+  border-bottom: 1px solid var(--planner-line);
+}
+
+.tpr-sheet .tpr-yn-row:last-child {
+  border-bottom: none;
+}
+
+.tpr-sheet .tpr-yn-label {
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  font-weight: 500;
+  line-height: 1.35;
+  padding: 0;
+  color: var(--ink);
+}
+
+.tpr-sheet .tpr-yn-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.tpr-sheet .tpr-yn-btn {
+  min-width: 3.2rem;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--planner-line);
+  background: #fff;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tpr-sheet .tpr-yn-btn.is-on {
+  background: var(--planner-teal-deep, #2f5f5c);
+  border-color: var(--planner-teal-deep, #2f5f5c);
+  color: #fff;
+}
+
+.tpr-sheet .tpr-attendance {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tpr-sheet .tpr-attendance .tpr-meta-cell:nth-child(2n) {
+  border-right: 1px solid var(--planner-line);
+}
+
+.tpr-sheet .tpr-attendance .tpr-meta-cell:last-child {
+  border-right: none;
+}
+
+@media (max-width: 1200px) and (min-width: 901px) {
+  .tpr-sheet .tpr-strengths-table .tpr-table-head,
+  .tpr-sheet .tpr-strengths-table .tpr-table-row {
+    grid-template-columns:
+      minmax(4.75rem, 0.28fr)
+      minmax(7.25rem, 0.72fr)
+      minmax(0, 1.55fr);
+  }
+
+  .tpr-sheet .tpr-strand {
+    font-size: 0.8rem;
+  }
+
+  .tpr-sheet .tpr-points {
+    font-size: 0.78rem;
+  }
+}
+
+.niot-section > .niot-q:first-of-type,
+.niot-section-title + .niot-q {
+  border-top: none;
+}
+
+.niot-sublabel {
+  padding: 0.4rem 0.65rem 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.niot-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border-top: 1px solid var(--planner-line);
+}
+
+.niot-split > div {
+  min-width: 0;
+}
+
+.niot-split > div + div {
+  border-left: 1px solid var(--planner-line);
+}
+
+.niot-meta-row {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr) 7.5rem minmax(0, 1fr);
+}
+
+.niot-meta-grid .planner-row {
+  border-bottom: 1px solid var(--planner-line);
+}
+
+.niot-meta-grid .planner-row:last-child {
+  border-bottom: none;
+}
+
+.niot-sequence-section > .niot-sequence-head {
+  margin: 0;
+  border-bottom: 1px solid var(--planner-line);
+}
+
+.niot-sequence-head,
+.niot-sequence-row {
+  display: grid;
+  grid-template-columns: minmax(4.5rem, 0.5fr) minmax(0, 1fr) minmax(0, 1fr);
+  width: 100%;
+}
+
+.niot-sequence-grid {
+  border: none !important;
+}
+
+.niot-sequence-block {
+  border-bottom: 1px solid var(--planner-line);
+}
+
+.niot-sequence-block:last-child {
+  border-bottom: none;
+}
+
+.niot-phase-heading {
+  padding: 0.4rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--planner-teal-deep, var(--ink-soft));
+  background: #f7faf9;
+  border-bottom: 1px solid var(--planner-line);
+}
+
+.lesson-plan-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  padding: 0.35rem 0 0.15rem;
+}
+
+.lesson-plan-footer-right {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-left: auto;
+}
+
+@media (max-width: 900px) {
+  .niot-meta-row,
+  .niot-split,
+  .niot-sequence-head,
+  .niot-sequence-row {
+    grid-template-columns: 1fr;
+  }
+
+  .niot-split > div + div {
+    border-left: none;
+    border-top: 1px solid var(--planner-line);
+  }
+
+  .niot-meta-row .planner-label-cell {
+    border-bottom: 1px solid var(--planner-line);
+  }
+}
 .schools-table {
   --schools-cols: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) 10.75rem;
 }
@@ -943,10 +1459,24 @@
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
+  align-items: stretch;
 }
 
 .overview-row {
   min-height: 2.75rem;
+}
+
+.overview-row > .planner-cell,
+.overview-row > .planner-label-cell {
+  align-self: stretch;
+  height: auto;
+  min-height: 100%;
+}
+
+.overview-row > .planner-cell > .planner-input,
+.overview-row > .planner-cell > .planner-input.is-grow {
+  min-height: 2.4rem;
+  height: 100%;
 }
 
 .overview-grid {
@@ -976,21 +1506,28 @@
 .social-finds-bar,
 .social-finds-row {
   display: grid !important;
-  grid-template-columns: 6.5rem 6rem 10rem 4.5rem !important;
-  width: 32rem;
-  min-width: 32rem;
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(0, 1fr)
+    minmax(0, 1fr)
+    minmax(0, 1fr)
+    5.5rem !important;
+  width: 100%;
+  min-width: 0;
   box-sizing: border-box;
 }
 
-.social-finds-grid {
-  width: 32rem;
-  min-width: 32rem;
+.social-finds-grid,
+.social-finds-sheet {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .social-finds-scroll > .social-finds-sheet {
   border: none;
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  min-width: 0;
   background: transparent;
 }
 
@@ -1040,6 +1577,7 @@
 
 .planner-label-cell {
   background: #f7faf9;
+  font-family: var(--font-body);
   font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -1071,6 +1609,17 @@
   resize: vertical;
   min-height: 1.8rem;
   line-height: 1.75rem;
+}
+
+.planner-input.is-grow {
+  display: block;
+  overflow: hidden;
+  resize: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-height: 2.2rem;
+  field-sizing: content;
 }
 
 .planner-input:focus {
@@ -1549,23 +2098,84 @@ select.planner-select option,
   gap: 0.55rem;
 }
 
+.obs-of-others {
+  gap: 0.85rem;
+}
+
+.obs-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.obs-meta-grid > .obs-box {
+  min-height: 0;
+  border: none;
+  border-right: 1px solid var(--planner-line);
+  border-bottom: 1px solid var(--planner-line);
+}
+
+.obs-meta-grid > .obs-box:nth-child(2n) {
+  border-right: none;
+}
+
+.obs-meta-grid > .obs-box:nth-last-child(-n + 2) {
+  border-bottom: none;
+}
+
+.obs-of-others .niot-section > .obs-box {
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  min-height: 0;
+}
+
+.obs-of-others .niot-section > .obs-box + .obs-box {
+  border-top: 1px solid var(--planner-line);
+}
+
+.obs-of-others .obs-box > .planner-input {
+  border: none;
+  border-radius: 0;
+}
+
+.obs-of-others .planner-label-cell {
+  font-family: var(--font-body);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
 .login-table-bar,
 .login-table-row {
-  grid-template-columns: 1.2fr 1fr 1fr;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) 5.5rem;
 }
 
-.finds-table-bar,
-.finds-table-row {
-  grid-template-columns: 1fr 1fr 1fr;
+.login-table .planner-row {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) 5.5rem;
 }
 
-.login-table .planner-row,
-.finds-table .planner-row:not(.social-finds-row) {
-  grid-template-columns: 1.2fr 1fr 1fr;
+.finds-table {
+  --finds-cols: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 5.5rem;
 }
 
-.finds-table.websites .planner-row {
-  grid-template-columns: 1.2fr 1.4fr 0.6fr;
+.finds-table .finds-table-bar,
+.finds-table .finds-table-row {
+  display: grid;
+  grid-template-columns: var(--finds-cols);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.login-table-actions,
+.finds-table-actions {
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+}
+
+.row-delete-btn {
+  font-size: 0.72rem;
+  padding: 0.25rem 0.45rem;
+  white-space: nowrap;
 }
 
 .homework-row {
@@ -1966,6 +2576,52 @@ select.planner-select option,
   .notes-preview-grid.is-two,
   .mentor-sheet-foot {
     grid-template-columns: 1fr;
+  }
+
+  .tpr-sheet .tpr-meta-grid,
+  .tpr-sheet .tpr-attendance,
+  .tpr-sheet .tpr-table-head,
+  .tpr-sheet .tpr-table-row,
+  .tpr-sheet .tpr-strengths-table .tpr-table-head,
+  .tpr-sheet .tpr-strengths-table .tpr-table-row,
+  .tpr-sheet .tpr-yn-row,
+  .obs-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tpr-sheet .tpr-meta-cell,
+  .tpr-sheet .tpr-attendance .tpr-meta-cell,
+  .tpr-sheet .tpr-attendance .tpr-meta-cell:nth-child(2n) {
+    border-right: none;
+  }
+
+  .tpr-sheet .tpr-strand,
+  .tpr-sheet .tpr-points {
+    border-right: none;
+    border-bottom: 1px solid var(--planner-line);
+  }
+
+  .tpr-sheet .tpr-table-head > span {
+    border-right: none;
+    border-bottom: 1px solid var(--planner-line);
+  }
+
+  .tpr-sheet .tpr-strengths-table .tpr-strength-cell {
+    min-height: 7rem;
+  }
+
+  .tpr-sheet .tpr-yn-actions {
+    justify-content: flex-start;
+  }
+
+  .obs-meta-grid > .obs-box,
+  .obs-meta-grid > .obs-box:nth-last-child(-n + 2) {
+    border-right: none;
+    border-bottom: 1px solid var(--planner-line);
+  }
+
+  .obs-meta-grid > .obs-box:last-child {
+    border-bottom: none;
   }
 
   .notes-preview-card {

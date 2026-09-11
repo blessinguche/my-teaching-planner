@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { School } from "../data/types";
 import { NoteEditor } from "./NoteEditor";
@@ -128,6 +128,7 @@ export function PlannerInput({
   multiline,
   rows,
   lined,
+  grow,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -135,14 +136,26 @@ export function PlannerInput({
   multiline?: boolean;
   rows?: number;
   lined?: boolean;
+  /** Auto-expanding textarea that wraps and grows with content. */
+  grow?: boolean;
 }) {
-  const cls = `planner-input${lined ? " is-lined" : ""}`;
-  if (multiline) {
+  const areaRef = useRef<HTMLTextAreaElement>(null);
+  const cls = `planner-input${lined ? " is-lined" : ""}${grow ? " is-grow" : ""}`;
+
+  useEffect(() => {
+    if (!grow || !areaRef.current) return;
+    const el = areaRef.current;
+    el.style.height = "0px";
+    el.style.height = `${Math.max(el.scrollHeight, 36)}px`;
+  }, [grow, value]);
+
+  if (multiline || grow) {
     return (
       <textarea
+        ref={areaRef}
         className={cls}
         value={value}
-        rows={rows ?? 3}
+        rows={grow ? 1 : rows ?? 3}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
       />

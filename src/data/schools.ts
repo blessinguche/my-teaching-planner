@@ -198,6 +198,7 @@ export function emptySchoolCollections() {
     placementOverviews: [] as import("./types").PlacementOverview[],
     calendarWeekNotes: [] as import("./types").CalendarWeekNote[],
     classroomPracticeNotes: [] as import("./types").ClassroomPracticeNote[],
+    traineeProgressRecords: [] as import("./types").TraineeProgressRecord[],
   };
 }
 
