@@ -11,18 +11,24 @@ import {
   Sheet,
 } from "../components/PlannerUI";
 import { addDays, todayISO } from "../data/dates";
+import { exportLessonPlanDocx } from "../data/exportLessonPlanDocx";
+import { exportObservationDocx } from "../data/exportObservationDocx";
+import { exportTprDocx } from "../data/exportTprDocx";
 import { uid, useStore } from "../data/store";
 import { timetableEventsOnDate } from "../data/timetableEvents";
 import type {
   CalendarWeekNote,
   FindEntry,
   KeyRolesMap,
+  LessonPlan,
+  LessonSequenceRow,
   LoginEntry,
   MeetingNote,
   PlacementProfile,
   PlanningResources,
   ProudPlace,
   School,
+  TraineeProgressRecord,
   TrainingTarget,
   WeeklyPlan,
 } from "../data/types";
@@ -99,10 +105,22 @@ export function SchoolHomePage() {
       items: [["Weekly timetable", "Periods, times and classes", `${base}/timetable`]],
     },
     {
+      title: "TPR",
+      items: [
+        [
+          "Observation of others",
+          "Lesson observation proforma",
+          `${base}/observation-of-others`,
+        ],
+        ["Lesson plan pro-forma", "NIoT lesson planning sheet", `${base}/lesson-plan`],
+        ["Weekly TPR", "Trainee progress record", `${base}/tpr`],
+      ],
+    },
+    {
       title: "Notes",
       items: [
         ["Mentor meeting", "Lined notes + priorities", `${base}/mentor`],
-        ["Observing others", "Observation sheet", `${base}/observing`],
+        ["Being observed", "Observation sheet", `${base}/observing`],
         [
           "Classroom practice",
           "Dot-grid notes & ideas",
@@ -233,7 +251,8 @@ function FocusInfoSection({ school }: { school: School }) {
 function FocusLoginsSection({ school }: { school: School }) {
   const { data, patchData } = useStore();
   const rows = data.logins.filter((l) => l.schoolId === school.id);
-  const blanks = Math.max(12 - rows.length, 3);
+  const minRows = 3;
+  const blanks = Math.max(minRows - rows.length, 0);
 
   function upsert(row: LoginEntry) {
     patchData((prev) => {
@@ -245,6 +264,13 @@ function FocusLoginsSection({ school }: { school: School }) {
           : [...prev.logins, row],
       };
     });
+  }
+
+  function remove(id: string) {
+    patchData((prev) => ({
+      ...prev,
+      logins: prev.logins.filter((l) => l.id !== id),
+    }));
   }
 
   function ensureBlank() {
@@ -260,12 +286,12 @@ function FocusLoginsSection({ school }: { school: School }) {
   const display = [
     ...rows,
     ...Array.from({ length: blanks }, (_, i) => ({
-      id: `blank-${i}`,
+      id: `pending-login-${school.id}-${i}`,
       schoolId: school.id,
       website: "",
       username: "",
       password: "",
-      _blank: true as const,
+      _pending: true as const,
     })),
   ];
 
@@ -278,6 +304,7 @@ function FocusLoginsSection({ school }: { school: School }) {
           <span>Website / App</span>
           <span>Username</span>
           <span>Password</span>
+          <span className="login-table-actions-head"> </span>
         </div>
         <div className="planner-grid joined">
           {display.map((row) => (
@@ -295,24 +322,33 @@ function FocusLoginsSection({ school }: { school: School }) {
                   }
                 >
                   <PlannerInput
-                    value={"_blank" in row ? "" : row[key]}
+                    grow
+                    value={"_pending" in row ? "" : row[key]}
                     onChange={(v) => {
-                      if ("_blank" in row) {
-                        upsert({
-                          id: uid("login"),
-                          schoolId: school.id,
-                          website: "",
-                          username: "",
-                          password: "",
-                          [key]: v,
-                        });
-                        return;
-                      }
-                      upsert({ ...row, [key]: v });
+                      upsert({
+                        id: row.id,
+                        schoolId: school.id,
+                        website: "_pending" in row ? "" : row.website,
+                        username: "_pending" in row ? "" : row.username,
+                        password: "_pending" in row ? "" : row.password,
+                        [key]: v,
+                      });
                     }}
                   />
                 </div>
               ))}
+              <div className="planner-cell login-table-actions" data-label="Actions">
+                {"_pending" in row ? null : (
+                  <button
+                    type="button"
+                    className="btn btn-danger row-delete-btn"
+                    aria-label="Delete row"
+                    onClick={() => remove(row.id)}
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -461,6 +497,7 @@ function SocialPlatformPicker({
 function FocusResourcesSection({ school }: { school: School }) {
   const { data, patchData } = useStore();
   const finds = data.finds.filter((f) => f.schoolId === school.id);
+  const minRows = 3;
 
   function upsert(row: FindEntry) {
     patchData((prev) => {
@@ -474,20 +511,27 @@ function FocusResourcesSection({ school }: { school: School }) {
     });
   }
 
+  function remove(id: string) {
+    patchData((prev) => ({
+      ...prev,
+      finds: prev.finds.filter((f) => f.id !== id),
+    }));
+  }
+
   function section(kind: Exclude<FindEntry["kind"], "social">, title: string, cols: string[]) {
     const rows = finds.filter((f) => f.kind === kind);
-    const blanks = Math.max(8 - rows.length, 2);
+    const blanks = Math.max(minRows - rows.length, 0);
     const display = [
       ...rows,
       ...Array.from({ length: blanks }, (_, i) => ({
-        id: `blank-${kind}-${i}`,
+        id: `pending-find-${kind}-${school.id}-${i}`,
         schoolId: school.id,
         kind,
         title: "",
         description: "",
         rating: "",
         platform: "",
-        _blank: true as const,
+        _pending: true as const,
       })),
     ];
     return (
@@ -498,6 +542,7 @@ function FocusResourcesSection({ school }: { school: School }) {
             {cols.map((c) => (
               <span key={c}>{c}</span>
             ))}
+            <span className="finds-table-actions-head"> </span>
           </div>
           <div className="planner-grid joined">
             {display.map((row) => (
@@ -509,25 +554,34 @@ function FocusResourcesSection({ school }: { school: School }) {
                     data-label={cols[i] ?? key}
                   >
                     <PlannerInput
-                      value={"_blank" in row ? "" : row[key]}
+                      grow
+                      value={"_pending" in row ? "" : row[key]}
                       onChange={(v) => {
-                        if ("_blank" in row) {
-                          upsert({
-                            id: uid("find"),
-                            schoolId: school.id,
-                            kind,
-                            title: "",
-                            description: "",
-                            rating: "",
-                            [key]: v,
-                          });
-                          return;
-                        }
-                        upsert({ ...row, [key]: v });
+                        upsert({
+                          id: row.id,
+                          schoolId: school.id,
+                          kind,
+                          title: "_pending" in row ? "" : row.title,
+                          description: "_pending" in row ? "" : row.description,
+                          rating: "_pending" in row ? "" : row.rating,
+                          [key]: v,
+                        });
                       }}
                     />
                   </div>
                 ))}
+                <div className="planner-cell finds-table-actions" data-label="Actions">
+                  {"_pending" in row ? null : (
+                    <button
+                      type="button"
+                      className="btn btn-danger row-delete-btn"
+                      aria-label="Delete row"
+                      onClick={() => remove(row.id)}
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -555,18 +609,18 @@ function FocusResourcesSection({ school }: { school: School }) {
 
   function socialSection() {
     const rows = finds.filter((f) => f.kind === "social");
-    const blanks = Math.max(8 - rows.length, 2);
+    const blanks = Math.max(minRows - rows.length, 0);
     const display = [
       ...rows,
       ...Array.from({ length: blanks }, (_, i) => ({
-        id: `blank-social-${i}`,
+        id: `pending-find-social-${school.id}-${i}`,
         schoolId: school.id,
         kind: "social" as const,
         title: "",
         description: "",
         rating: "",
         platform: "",
-        _blank: true as const,
+        _pending: true as const,
       })),
     ];
 
@@ -574,66 +628,76 @@ function FocusResourcesSection({ school }: { school: School }) {
       row: (typeof display)[number],
       patch: Partial<FindEntry>,
     ) {
-      if ("_blank" in row) {
-        upsert({
-          id: uid("find"),
-          schoolId: school.id,
-          kind: "social",
-          title: "",
-          description: "",
-          rating: "",
-          platform: "",
-          ...patch,
-        });
-        return;
-      }
-      upsert({ ...row, ...patch });
+      upsert({
+        id: row.id,
+        schoolId: school.id,
+        kind: "social",
+        title: "_pending" in row ? "" : row.title,
+        description: "_pending" in row ? "" : row.description,
+        rating: "_pending" in row ? "" : row.rating,
+        platform: "_pending" in row ? "" : row.platform ?? "",
+        ...patch,
+      });
     }
 
     return (
       <div className="planner-block">
         <div className="planner-banner">Social / posts</div>
-        <div className="planner-x-scroll social-finds-scroll">
-          <Sheet className="social-finds-sheet">
-            <div className="planner-bar soft social-finds-bar">
-              <span>Platform</span>
-              <span>Handle</span>
-              <span>Description</span>
-              <span>Rating</span>
-            </div>
-            <div className="planner-grid joined social-finds-grid">
-              {display.map((row) => (
-                <div key={row.id} className="planner-row social-finds-row">
-                  <div className="planner-cell social-platform-cell">
-                    <SocialPlatformPicker
-                      value={"_blank" in row ? "" : row.platform ?? ""}
-                      onChange={(platform) => write(row, { platform })}
-                    />
-                  </div>
-                  <div className="planner-cell">
-                    <PlannerInput
-                      value={"_blank" in row ? "" : row.title}
-                      placeholder="@handle"
-                      onChange={(v) => write(row, { title: v })}
-                    />
-                  </div>
-                  <div className="planner-cell">
-                    <PlannerInput
-                      value={"_blank" in row ? "" : row.description}
-                      onChange={(v) => write(row, { description: v })}
-                    />
-                  </div>
-                  <div className="planner-cell">
-                    <PlannerInput
-                      value={"_blank" in row ? "" : row.rating}
-                      onChange={(v) => write(row, { rating: v })}
-                    />
-                  </div>
+        <Sheet className="stackable-table social-finds-sheet finds-table">
+          <div className="planner-bar soft social-finds-bar">
+            <span>Platform</span>
+            <span>Handle</span>
+            <span>Description</span>
+            <span>Rating</span>
+            <span className="finds-table-actions-head"> </span>
+          </div>
+          <div className="planner-grid joined social-finds-grid">
+            {display.map((row) => (
+              <div key={row.id} className="planner-row social-finds-row">
+                <div className="planner-cell social-platform-cell" data-label="Platform">
+                  <SocialPlatformPicker
+                    value={"_pending" in row ? "" : row.platform ?? ""}
+                    onChange={(platform) => write(row, { platform })}
+                  />
                 </div>
-              ))}
-            </div>
-          </Sheet>
-        </div>
+                <div className="planner-cell" data-label="Handle">
+                  <PlannerInput
+                    grow
+                    value={"_pending" in row ? "" : row.title}
+                    placeholder="@handle"
+                    onChange={(v) => write(row, { title: v })}
+                  />
+                </div>
+                <div className="planner-cell" data-label="Description">
+                  <PlannerInput
+                    grow
+                    value={"_pending" in row ? "" : row.description}
+                    onChange={(v) => write(row, { description: v })}
+                  />
+                </div>
+                <div className="planner-cell" data-label="Rating">
+                  <PlannerInput
+                    grow
+                    value={"_pending" in row ? "" : row.rating}
+                    onChange={(v) => write(row, { rating: v })}
+                  />
+                </div>
+                <div className="planner-cell finds-table-actions" data-label="Actions">
+                  {"_pending" in row ? null : (
+                    <button
+                      type="button"
+                      className="btn btn-danger row-delete-btn"
+                      aria-label="Delete row"
+                      onClick={() => remove(row.id)}
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Sheet>
         <button
           type="button"
           className="btn"
@@ -1613,6 +1677,7 @@ function PlanningOverviewSection({ school }: { school: School }) {
                       data-label={overview.weekHeaders[ci]?.trim() || `Col ${ci + 1}`}
                     >
                       <PlannerInput
+                        grow
                         value={overview.weekCells[key] ?? ""}
                         onChange={(v) =>
                           save({
@@ -1884,12 +1949,530 @@ export function SchoolPlanningPage() {
           items={[
             { id: "weekly", label: "Weekly", blurb: "This week" },
             { id: "resources", label: "Resources", blurb: "Schemes" },
+            {
+              id: "overview",
+              label: "Overview",
+              blurb: "Placement",
+              href: `/school/${school.id}/overview`,
+            },
           ]}
         />
         <div className="planner-stack">
           <PlanningWeeklySection school={school} />
           <PlanningResourcesSection school={school} />
         </div>
+      </div>
+    </PlannerPageShell>
+  );
+}
+
+const NIoT_SEQUENCE_TEMPLATE: {
+  phase: LessonSequenceRow["phase"];
+  heading: string;
+}[] = [
+  {
+    phase: "entrance",
+    heading: "Entrance to the lesson and/or retrieval practice",
+  },
+  {
+    phase: "introduction",
+    heading: "Introduction or Hook",
+  },
+  {
+    phase: "input",
+    heading:
+      "Lesson input (with teaching input & modelling, and assessment of progress made against lesson objectives)",
+  },
+  {
+    phase: "checkpoint",
+    heading: "Checkpoint 1 · Checkpoint 2 · Checkpoint …",
+  },
+  {
+    phase: "plenary",
+    heading: "Plenary",
+  },
+];
+
+function blankNiotSequence(): LessonSequenceRow[] {
+  return NIoT_SEQUENCE_TEMPLATE.map((t) => ({
+    id: uid("ls"),
+    phase: t.phase,
+    heading: t.heading,
+    time: "",
+    teacher: "",
+    learners: "",
+  }));
+}
+
+function blankNiotLesson(schoolId: string): LessonPlan {
+  return {
+    id: uid("lesson"),
+    schoolId,
+    teacher: "",
+    date: todayISO(),
+    teachingGroup: "",
+    title: "New lesson",
+    objectives: "",
+    review: "",
+    startingFrom: "",
+    endGoal: "",
+    coreKnowledge: "",
+    checkpointCheck: "",
+    misconceptions: "",
+    findMisconceptions: "",
+    vocabulary: "",
+    mentorFocus: "",
+    sequence: blankNiotSequence(),
+  };
+}
+
+/** Bring older lesson shapes up to the NIoT proforma fields. */
+function normalizeNiotLesson(raw: LessonPlan & Record<string, unknown>): LessonPlan {
+  const legacy = raw as LessonPlan & {
+    className?: string;
+    subject?: string;
+    priorLearning?: string;
+    starter?: string;
+    main?: string;
+    plenary?: string;
+  };
+  const sequence =
+    Array.isArray(raw.sequence) && raw.sequence.length > 0
+      ? raw.sequence
+      : blankNiotSequence().map((row) => {
+          if (row.phase === "entrance" || row.phase === "introduction") {
+            return { ...row, teacher: legacy.starter ?? "" };
+          }
+          if (row.phase === "input" || row.phase === "checkpoint") {
+            return { ...row, teacher: legacy.main ?? "" };
+          }
+          if (row.phase === "plenary") {
+            return { ...row, teacher: legacy.plenary ?? "" };
+          }
+          return row;
+        });
+
+  return {
+    id: raw.id,
+    schoolId: raw.schoolId,
+    teacher: raw.teacher ?? "",
+    date: raw.date || todayISO(),
+    teachingGroup: raw.teachingGroup || legacy.className || "",
+    title: raw.title || "Untitled lesson",
+    objectives: raw.objectives ?? "",
+    review: raw.review || legacy.priorLearning || "",
+    startingFrom: raw.startingFrom ?? "",
+    endGoal: raw.endGoal ?? "",
+    coreKnowledge: raw.coreKnowledge ?? "",
+    checkpointCheck: raw.checkpointCheck ?? "",
+    misconceptions: raw.misconceptions ?? "",
+    findMisconceptions: raw.findMisconceptions ?? "",
+    vocabulary: raw.vocabulary ?? "",
+    mentorFocus: raw.mentorFocus ?? "",
+    sequence,
+  };
+}
+
+export function SchoolLessonPlanPage() {
+  const school = useSchool();
+  const { data, patchData } = useStore();
+  const lessons = data.lessons
+    .filter((l) => l.schoolId === school.id)
+    .map((l) => normalizeNiotLesson(l as LessonPlan & Record<string, unknown>))
+    .sort((a, b) => b.date.localeCompare(a.date) || a.title.localeCompare(b.title));
+  const [activeId, setActiveId] = useState<string | null>(lessons[0]?.id ?? null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const active =
+    lessons.find((l) => l.id === activeId) ??
+    lessons[0] ??
+    null;
+
+  useEffect(() => {
+    if (active && activeId !== active.id) setActiveId(active.id);
+    if (!active) setActiveId(null);
+  }, [active, activeId]);
+
+  function createBlank() {
+    const blank = blankNiotLesson(school.id);
+    patchData((prev) => ({
+      ...prev,
+      lessons: [blank, ...prev.lessons],
+    }));
+    setActiveId(blank.id);
+  }
+
+  function save(next: LessonPlan) {
+    patchData((prev) => ({
+      ...prev,
+      lessons: prev.lessons.map((l) => (l.id === next.id ? next : l)),
+    }));
+  }
+
+  function remove(id: string) {
+    patchData((prev) => ({
+      ...prev,
+      lessons: prev.lessons.filter((l) => l.id !== id),
+    }));
+    setActiveId((cur) => (cur === id ? null : cur));
+  }
+
+  function updateSequence(
+    plan: LessonPlan,
+    rowId: string,
+    patch: Partial<LessonSequenceRow>,
+  ) {
+    save({
+      ...plan,
+      sequence: plan.sequence.map((r) =>
+        r.id === rowId ? { ...r, ...patch } : r,
+      ),
+    });
+  }
+
+  async function exportActive() {
+    if (!active) return;
+    setExportError(null);
+    setExporting(true);
+    try {
+      await exportLessonPlanDocx(active);
+    } catch (err) {
+      setExportError(
+        err instanceof Error ? err.message : "Could not export Word document.",
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  return (
+    <PlannerPageShell
+      school={school}
+      section="TPR"
+      title="Lesson plan pro-forma"
+      caption="NIoT ITE lesson plan — Part I overview/thinking and Part II lesson sequence."
+      backTo={`/school/${school.id}/tpr`}
+      backLabel="TPR"
+    >
+      <div className="planner-stack lesson-plan-page" style={{ gridColumn: "1 / -1" }}>
+        <div className="lesson-plan-toolbar">
+          <button type="button" className="btn btn-primary" onClick={createBlank}>
+            + New lesson plan
+          </button>
+          {active ? (
+            <button
+              type="button"
+              className="btn"
+              disabled={exporting}
+              onClick={() => void exportActive()}
+            >
+              {exporting ? "Preparing Word…" : "Export Word proforma"}
+            </button>
+          ) : null}
+        </div>
+        {exportError ? <p className="form-error">{exportError}</p> : null}
+
+        {lessons.length > 0 ? (
+          <div className="lesson-plan-list">
+            {lessons.map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                className={`lesson-plan-chip${active?.id === l.id ? " is-active" : ""}`}
+                onClick={() => setActiveId(l.id)}
+              >
+                <strong>{l.title || "Untitled"}</strong>
+                <span>
+                  {l.date}
+                  {l.teachingGroup ? ` · ${l.teachingGroup}` : ""}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="planner-caption">No lesson plans yet — create one to open the NIoT pro-forma.</p>
+        )}
+
+        {active ? (
+          <div className="lesson-plan-sheet-wrap">
+            <div className="lesson-plan-form">
+              <h2 className="planner-heading">Part I — Lesson overview / thinking</h2>
+
+              <section className="niot-section" aria-label="Lesson details">
+                <div className="planner-grid joined niot-meta-grid">
+                  <div className="planner-row niot-meta-row">
+                    <div className="planner-label-cell">Teacher</div>
+                    <div className="planner-cell">
+                      <PlannerInput
+                        value={active.teacher}
+                        onChange={(v) => save({ ...active, teacher: v })}
+                      />
+                    </div>
+                    <div className="planner-label-cell">Date</div>
+                    <div className="planner-cell">
+                      <input
+                        className="planner-input"
+                        type="date"
+                        value={active.date}
+                        onChange={(e) => save({ ...active, date: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="planner-row niot-meta-row">
+                    <div className="planner-label-cell">Teaching group</div>
+                    <div className="planner-cell">
+                      <PlannerInput
+                        value={active.teachingGroup}
+                        onChange={(v) => save({ ...active, teachingGroup: v })}
+                      />
+                    </div>
+                    <div className="planner-label-cell">Lesson topic / title</div>
+                    <div className="planner-cell">
+                      <PlannerInput
+                        value={active.title}
+                        onChange={(v) => save({ ...active, title: v })}
+                      />
+                    </div>
+                  </div>
+                  <LabelRow label="Lesson objective(s)">
+                    <PlannerInput
+                      grow
+                      multiline
+                      rows={2}
+                      value={active.objectives}
+                      onChange={(v) => save({ ...active, objectives: v })}
+                    />
+                  </LabelRow>
+                </div>
+              </section>
+
+              <section className="niot-section" aria-label="Review">
+                <h3 className="niot-section-title">Review</h3>
+                <p className="niot-prompt">
+                  What previous learning do I need to revisit in today&apos;s lesson?
+                </p>
+                <PlannerInput
+                  grow
+                  multiline
+                  rows={3}
+                  value={active.review}
+                  onChange={(v) => save({ ...active, review: v })}
+                />
+              </section>
+
+              <section className="niot-section" aria-label="Key lesson questions">
+                <h3 className="niot-section-title">Key lesson questions</h3>
+
+                <div className="niot-q">
+                  <p className="niot-prompt">
+                    1. Where are the learners starting from?
+                  </p>
+                  <PlannerInput
+                    grow
+                    multiline
+                    rows={2}
+                    value={active.startingFrom}
+                    onChange={(v) => save({ ...active, startingFrom: v })}
+                  />
+                </div>
+
+                <div className="niot-q">
+                  <p className="niot-prompt">
+                    2. Where do I want them to get to by the end of the lesson?
+                  </p>
+                  <PlannerInput
+                    grow
+                    multiline
+                    rows={2}
+                    value={active.endGoal}
+                    onChange={(v) => save({ ...active, endGoal: v })}
+                  />
+                </div>
+
+                <div className="niot-q">
+                  <p className="niot-prompt">
+                    3. What is the core knowledge that I will assess in the lesson?
+                    How will I know if the learners have grasped the core knowledge?
+                  </p>
+                  <div className="niot-split">
+                    <div>
+                      <div className="niot-sublabel">Core knowledge</div>
+                      <PlannerInput
+                        grow
+                        multiline
+                        rows={3}
+                        value={active.coreKnowledge}
+                        onChange={(v) => save({ ...active, coreKnowledge: v })}
+                      />
+                    </div>
+                    <div>
+                      <div className="niot-sublabel">
+                        What should I do at the checkpoint(s) to check if the learners
+                        have grasped the core knowledge?
+                      </div>
+                      <PlannerInput
+                        grow
+                        multiline
+                        rows={3}
+                        value={active.checkpointCheck}
+                        onChange={(v) => save({ ...active, checkpointCheck: v })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="niot-q">
+                  <p className="niot-prompt">
+                    4. What are the likely misconceptions? You might need to ask an
+                    expert colleague. How will I find out what misconceptions the
+                    learners might have?
+                  </p>
+                  <div className="niot-split">
+                    <div>
+                      <div className="niot-sublabel">Likely misconception(s)</div>
+                      <PlannerInput
+                        grow
+                        multiline
+                        rows={3}
+                        value={active.misconceptions}
+                        onChange={(v) => save({ ...active, misconceptions: v })}
+                      />
+                    </div>
+                    <div>
+                      <div className="niot-sublabel">
+                        What I will do to find out the learners&apos; misconceptions
+                      </div>
+                      <PlannerInput
+                        grow
+                        multiline
+                        rows={3}
+                        value={active.findMisconceptions}
+                        onChange={(v) =>
+                          save({ ...active, findMisconceptions: v })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="niot-q">
+                  <p className="niot-prompt">
+                    5. What are the tier 2 and tier 3 vocabulary / key words for this
+                    lesson? How will these be specifically taught? How might the word
+                    use be different in your / other subjects or everyday use?
+                  </p>
+                  <PlannerInput
+                    grow
+                    multiline
+                    rows={3}
+                    value={active.vocabulary}
+                    onChange={(v) => save({ ...active, vocabulary: v })}
+                  />
+                </div>
+              </section>
+
+              <section className="niot-section" aria-label="Mentor focus">
+                <h3 className="niot-section-title">
+                  Focus: action step(s) from your mentor meeting
+                </h3>
+                <p className="niot-prompt">
+                  This focus should be discussed with your mentor in your previous
+                  mentor meeting and, as much as possible, should link to the point(s)
+                  you have practised with them. This may continue to be a focus for a
+                  series of lessons.
+                </p>
+                <PlannerInput
+                  grow
+                  multiline
+                  rows={3}
+                  value={active.mentorFocus}
+                  onChange={(v) => save({ ...active, mentorFocus: v })}
+                />
+              </section>
+
+              <h2 className="planner-heading">Part II — Lesson sequence</h2>
+              <p className="niot-part-lede">
+                Be specific with lesson time. Teacher column: what will you say and do
+                which results in teaching? Learners column: what thinking will they do
+                which leads to learning, and what will they be doing?
+              </p>
+
+              <section className="niot-section niot-sequence-section" aria-label="Lesson sequence">
+                <div className="planner-bar soft niot-sequence-head">
+                  <span>Lesson time</span>
+                  <span>Teacher — what will you say and do?</span>
+                  <span>Learners — thinking &amp; doing</span>
+                </div>
+                <div className="planner-grid joined niot-sequence-grid">
+                  {active.sequence
+                    .filter((row) => row.phase !== "other")
+                    .map((row) => (
+                    <div key={row.id} className="niot-sequence-block">
+                      {row.heading ? (
+                        <div className="niot-phase-heading">{row.heading}</div>
+                      ) : null}
+                      <div className="planner-row niot-sequence-row">
+                        <div className="planner-cell" data-label="Lesson time">
+                          <PlannerInput
+                            grow
+                            value={row.time}
+                            placeholder="e.g. 09:15–09:25"
+                            onChange={(v) =>
+                              updateSequence(active, row.id, { time: v })
+                            }
+                          />
+                        </div>
+                        <div className="planner-cell" data-label="Teacher">
+                          <PlannerInput
+                            grow
+                            multiline
+                            rows={3}
+                            value={row.teacher}
+                            onChange={(v) =>
+                              updateSequence(active, row.id, { teacher: v })
+                            }
+                          />
+                        </div>
+                        <div className="planner-cell" data-label="Learners">
+                          <PlannerInput
+                            grow
+                            multiline
+                            rows={3}
+                            value={row.learners}
+                            onChange={(v) =>
+                              updateSequence(active, row.id, { learners: v })
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <div className="lesson-plan-footer">
+                <div className="lesson-plan-footer-right">
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={exporting}
+                    onClick={() => void exportActive()}
+                  >
+                    {exporting ? "Preparing Word…" : "Export Word proforma"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    onClick={() => remove(active.id)}
+                  >
+                    Delete this plan
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </PlannerPageShell>
   );
@@ -1983,7 +2566,7 @@ export function SchoolNotesHubPage() {
       school={school}
       section="Notes"
       title="Notes"
-      caption="Open a mentor meeting, observation, or classroom practice sheet."
+      caption="Mentor meetings, observations, and classroom practice."
       backTo={`/school/${school.id}`}
       backLabel="Home"
     >
@@ -2006,9 +2589,9 @@ export function SchoolNotesHubPage() {
           </div>
         </Link>
         <Link to={`${base}/observing`} className="notes-preview-card">
-          <h3>Observation of others</h3>
+          <h3>Being observed</h3>
           <div className="notes-preview-mini">
-            <div className="mini-bar">Observing</div>
+            <div className="mini-bar">Observed</div>
             <div className="mini-box">Focus · Outline</div>
             <div className="mini-box">Went well / Impact</div>
             <div className="mini-box">Develop 1 · 2 · 3</div>
@@ -2024,6 +2607,519 @@ export function SchoolNotesHubPage() {
             <div className="mini-dots" />
           </div>
         </Link>
+      </div>
+    </PlannerPageShell>
+  );
+}
+
+function blankTpr(schoolId: string): TraineeProgressRecord {
+  return {
+    id: uid("tpr"),
+    schoolId,
+    weekLabel: "",
+    date: todayISO(),
+    lessonPlanId: undefined,
+    formalLessonPlanReady: "",
+    strengthSC: "",
+    strengthPT: "",
+    strengthKYL: "",
+    strengthBR: "",
+    strengthMC: "",
+    strengthART: "",
+    strengthPB: "",
+    strengthEC: "",
+    keyDevelopmentPoints: "",
+    weeklyReviewDrawingUpon: "",
+    weeklyReviewFurtherProgress: "",
+    wellbeingCheckDone: "",
+    centreActionMet: "",
+    centreActionEvidence: "",
+    mentorActionMet: "",
+    mentorActionEvidence: "",
+    notMetReasons: "",
+    daysAbsent: "",
+    absenceReasons: "",
+    absenceStart: "",
+    absenceEnd: "",
+    absenceOther: "",
+    trainingConversationNotes: "",
+    centreActionStep1: "",
+    centreActionStep2: "",
+    mentorLedConversationDone: "",
+    curriculumTaskDone: "",
+  };
+}
+
+export function SchoolTprPage() {
+  const school = useSchool();
+  const { data, patchData } = useStore();
+  useSectionHash();
+  const records = (data.traineeProgressRecords ?? [])
+    .filter((r) => r.schoolId === school.id)
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const lessons = data.lessons.filter((l) => l.schoolId === school.id);
+  const [activeId, setActiveId] = useState<string | null>(records[0]?.id ?? null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const active =
+    records.find((r) => r.id === activeId) ?? records[0] ?? null;
+
+  useEffect(() => {
+    if (active && activeId !== active.id) setActiveId(active.id);
+    if (!active) setActiveId(null);
+  }, [active, activeId]);
+
+  function save(next: TraineeProgressRecord) {
+    patchData((prev) => {
+      const list = prev.traineeProgressRecords ?? [];
+      const exists = list.some((r) => r.id === next.id);
+      return {
+        ...prev,
+        traineeProgressRecords: exists
+          ? list.map((r) => (r.id === next.id ? next : r))
+          : [next, ...list],
+      };
+    });
+    setActiveId(next.id);
+  }
+
+  function createBlank() {
+    const blank = blankTpr(school.id);
+    save(blank);
+  }
+
+  function remove(id: string) {
+    patchData((prev) => ({
+      ...prev,
+      traineeProgressRecords: (prev.traineeProgressRecords ?? []).filter(
+        (r) => r.id !== id,
+      ),
+    }));
+    setActiveId((cur) => (cur === id ? null : cur));
+  }
+
+  async function exportActive() {
+    if (!active) return;
+    setExportError(null);
+    setExporting(true);
+    try {
+      const lesson = active.lessonPlanId
+        ? lessons.find((l) => l.id === active.lessonPlanId)
+        : undefined;
+      await exportTprDocx(active, lesson ?? null);
+    } catch (err) {
+      setExportError(
+        err instanceof Error ? err.message : "Could not export Word document.",
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function setField(key: keyof TraineeProgressRecord, value: string) {
+    if (!active) return;
+    save({ ...active, [key]: value });
+  }
+
+  function yesNo(
+    label: string,
+    key: keyof TraineeProgressRecord,
+  ) {
+    if (!active) return null;
+    const value = String(active[key] ?? "").toLowerCase();
+    return (
+      <div className="tpr-yn-row">
+        <div className="tpr-yn-label">{label}</div>
+        <div className="tpr-yn-actions">
+          {(["Yes", "No"] as const).map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              className={`tpr-yn-btn${value === opt.toLowerCase() ? " is-on" : ""}`}
+              onClick={() => setField(key, opt)}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  function boxField(
+    label: string,
+    key: keyof TraineeProgressRecord,
+    rows = 3,
+  ) {
+    if (!active) return null;
+    return (
+      <div className="tpr-box">
+        <div className="planner-label-cell">{label}</div>
+        <PlannerInput
+          grow
+          multiline
+          rows={rows}
+          value={String(active[key] ?? "")}
+          onChange={(v) => setField(key, v)}
+        />
+      </div>
+    );
+  }
+
+  const strengthRows: {
+    key: keyof TraineeProgressRecord;
+    strand: string;
+    points: string;
+  }[] = [
+    {
+      key: "strengthSC",
+      strand: "Subject and Curriculum (S&C)",
+      points:
+        "Knowledge of national and wider curriculum.\nInclusion of subject-specific pedagogical approaches.\nAwareness of subject misconceptions and strategies to address them.\nUnderstanding of disciplinary literacy.\nAwareness of early reading in learning to read and write.\nAwareness of whole school numeracy/early maths.",
+    },
+    {
+      key: "strengthPT",
+      strand: "Planning and Teaching (P&T)",
+      points:
+        "Plan learning that fosters children’s love of learning and promotes a positive attitude to lessons.\nInclusion of objective-driven lesson planning.\nApplication of the principles of cognitive science when planning.\nUse of measurable success criteria to check learners’ understanding.\nAppropriate modelling, scaffolding and strategies to develop metacognition.\nLesson time is used effectively, including consideration of grouping, and supports progress.",
+    },
+    {
+      key: "strengthKYL",
+      strand: "Knowing your learners (KYL)",
+      points:
+        "Adaption of learning to support children with SEND.\nAwareness of diverse learning and development needs, abilities, dispositions and backgrounds.\nUse of learner specific data to inform planning and teaching.\nDemonstration of child development theories and adapt learning to support all learners, in a responsive manner.",
+    },
+    {
+      key: "strengthBR",
+      strand: "Behaviour and Relationships (B&R)",
+      points:
+        "Clear communication of high expectations.\nApplication of the behaviour policy.\nRewards and sanctions used in line with policies.\nUnderstanding of individual needs and responding accordingly in a supportive manner.\nCreation of a safe and inclusive learning environment.",
+    },
+    {
+      key: "strengthMC",
+      strand: "Memory and cognition (M&C)",
+      points:
+        "Demonstration of cognitive load theory in the planning and delivery of lessons.\nApplication of classroom strategies to build long term memory.",
+    },
+    {
+      key: "strengthART",
+      strand: "Assessment and Responsive Teaching (ART)",
+      points:
+        "Application of the school’s feedback and marking policy.\nFormative assessment strategies used to support learning.\nApplication of a range of developmentally appropriate questions.\nPrior assessment factored into planning.\nFeedback given to support children’s progress.\nOpportunities for children to reflect on progress.",
+    },
+    {
+      key: "strengthPB",
+      strand: "Professional Behaviours (PB)",
+      points:
+        "Professional behaviours are upheld.\nAll learners treated with dignity and respect.\nPromotion of positive values and attitudes, including scholarship and a love of learning.\nWorking professionally and collaboratively with colleagues before and during the lesson.\nEvidence of using educational debate / research, including engaging in reflective practice.",
+    },
+    {
+      key: "strengthEC",
+      strand: "Education in Context (EC)",
+      points:
+        "Demonstration of an openness to different perspectives.\nDemonstration of a classroom culture in which learners matter and belong.\nPromotion of practices that challenge deficit thinking and discrimination.\nSupporting learners to make informed decisions linked to educational contexts e.g. racial literacy, AI, sustainability, civic responsibility.",
+    },
+  ];
+
+  return (
+    <PlannerPageShell
+      school={school}
+      section="TPR"
+      title="TPR"
+      caption="Trainee Progress Record — lesson plan, mentor observation, weekly mentoring space."
+      backTo={`/school/${school.id}`}
+      backLabel="Home"
+    >
+      <div className="planner-stack tpr-page" style={{ gridColumn: "1 / -1" }}>
+        <JumpTiles
+          items={[
+            {
+              id: "observation-of-others",
+              label: "Obs. of others",
+              blurb: "Proforma",
+              href: `/school/${school.id}/observation-of-others`,
+            },
+            {
+              id: "lesson-plan",
+              label: "Lesson plan",
+              blurb: "Pro-forma",
+              href: `/school/${school.id}/lesson-plan`,
+            },
+            { id: "record", label: "Weekly TPR", blurb: "This week" },
+            { id: "observation", label: "Mentor obs.", blurb: "Strengths" },
+            { id: "mentoring", label: "Mentoring", blurb: "Weekly space" },
+          ]}
+        />
+
+        <div className="lesson-plan-toolbar">
+          <button type="button" className="btn btn-primary" onClick={createBlank}>
+            + New weekly TPR
+          </button>
+          {active ? (
+            <button
+              type="button"
+              className="btn"
+              disabled={exporting}
+              onClick={() => void exportActive()}
+            >
+              {exporting ? "Preparing Word…" : "Export Word TPR"}
+            </button>
+          ) : null}
+        </div>
+        {exportError ? <p className="form-error">{exportError}</p> : null}
+
+        {records.length > 0 ? (
+          <div className="lesson-plan-list">
+            {records.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                className={`lesson-plan-chip${active?.id === r.id ? " is-active" : ""}`}
+                onClick={() => setActiveId(r.id)}
+              >
+                <strong>{r.weekLabel || "Untitled week"}</strong>
+                <span>{r.date}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="planner-caption">
+            No weekly TPRs yet — create one, link a lesson plan, then export to Word.
+          </p>
+        )}
+
+        {active ? (
+          <div className="lesson-plan-form tpr-sheet">
+            <section id="record" className="niot-section">
+              <h3 className="niot-section-title">
+                Trainee Progress Record — weekly sheet
+              </h3>
+              <div className="tpr-meta-grid">
+                <div className="tpr-meta-cell">
+                  <span className="tpr-meta-label">Week</span>
+                  <PlannerInput
+                    grow
+                    value={active.weekLabel}
+                    placeholder="Term 1: Week 2 following Thu 10th September"
+                    onChange={(v) => setField("weekLabel", v)}
+                  />
+                </div>
+                <div className="tpr-meta-cell">
+                  <span className="tpr-meta-label">Date</span>
+                  <input
+                    className="planner-input"
+                    type="date"
+                    value={active.date}
+                    onChange={(e) => setField("date", e.target.value)}
+                  />
+                </div>
+                <div className="tpr-meta-cell tpr-meta-span">
+                  <span className="tpr-meta-label">Linked lesson plan</span>
+                  <select
+                    className="planner-select"
+                    value={active.lessonPlanId ?? ""}
+                    onChange={(e) =>
+                      save({
+                        ...active,
+                        lessonPlanId: e.target.value || undefined,
+                      })
+                    }
+                  >
+                    <option value="">None — fill lesson plan separately</option>
+                    {lessons.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.date} · {l.title || "Untitled"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="tpr-yn-block">
+                {yesNo(
+                  "Formal lesson plan ready for observed lesson?",
+                  "formalLessonPlanReady",
+                )}
+              </div>
+              <p className="niot-part-lede" style={{ padding: "0.55rem 0.75rem" }}>
+                Tip: open{" "}
+                <Link to={`/school/${school.id}/lesson-plan`}>Lesson plan pro-forma</Link>{" "}
+                to complete Part I / II, then link it here before exporting.
+              </p>
+            </section>
+
+            <h2 id="observation" className="planner-heading">
+              Lesson observation — mentors
+            </h2>
+            <section className="niot-section">
+              <h3 className="niot-section-title">
+                Strengths in relation to Core Standards
+              </h3>
+              <p className="tpr-table-note">
+                NB. Please focus on the appropriate strands only — not all
+                strands need to be evidenced in each observation.
+              </p>
+              <div className="tpr-table tpr-strengths-table">
+                <div className="tpr-table-head">
+                  <span>Strand</span>
+                  <span>
+                    Points to consider
+                    <em>(Linked to the NIoT ITE Curriculum)</em>
+                  </span>
+                  <span>Demonstrated strengths</span>
+                </div>
+                {strengthRows.map((row) => (
+                  <div key={row.key} className="tpr-table-row">
+                    <div className="tpr-strand">{row.strand}</div>
+                    <div className="tpr-points">{row.points}</div>
+                    <div className="tpr-strength-cell">
+                      <PlannerInput
+                        multiline
+                        rows={3}
+                        value={String(active[row.key] ?? "")}
+                        onChange={(v) => setField(row.key, v)}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {boxField("Key development points", "keyDevelopmentPoints", 4)}
+            </section>
+
+            <h2 id="mentoring" className="planner-heading">
+              Weekly mentoring space
+            </h2>
+            <section className="niot-section">
+              <h3 className="niot-section-title">Weekly review (trainee)</h3>
+              {boxField(
+                "Drawing upon observation feedback and deliberate practice…",
+                "weeklyReviewDrawingUpon",
+                4,
+              )}
+              {boxField(
+                "If further progress is required against your action steps…",
+                "weeklyReviewFurtherProgress",
+                3,
+              )}
+            </section>
+
+            <section className="niot-section">
+              <h3 className="niot-section-title">Progress review (mentor)</h3>
+              <div className="tpr-yn-block">
+                {yesNo("Wellbeing check completed?", "wellbeingCheckDone")}
+                {yesNo("Centre-based action step met?", "centreActionMet")}
+              </div>
+              {boxField(
+                "Evidence for centre-based action step",
+                "centreActionEvidence",
+                3,
+              )}
+              <div className="tpr-yn-block">
+                {yesNo("Mentor-based action step met?", "mentorActionMet")}
+              </div>
+              {boxField(
+                "Evidence for mentor-based action step",
+                "mentorActionEvidence",
+                3,
+              )}
+              {boxField(
+                "If either/both not met — trainee’s plan to catch up",
+                "notMetReasons",
+                3,
+              )}
+            </section>
+
+            <section className="niot-section">
+              <h3 className="niot-section-title">Attendance check</h3>
+              <div className="tpr-meta-grid tpr-attendance">
+                <div className="tpr-meta-cell">
+                  <span className="tpr-meta-label">Days absent in school</span>
+                  <PlannerInput
+                    value={active.daysAbsent}
+                    onChange={(v) => setField("daysAbsent", v)}
+                  />
+                </div>
+                <div className="tpr-meta-cell">
+                  <span className="tpr-meta-label">Start date of absence</span>
+                  <PlannerInput
+                    value={active.absenceStart}
+                    onChange={(v) => setField("absenceStart", v)}
+                    placeholder="YYYY-MM-DD"
+                  />
+                </div>
+                <div className="tpr-meta-cell">
+                  <span className="tpr-meta-label">End date of absence</span>
+                  <PlannerInput
+                    value={active.absenceEnd}
+                    onChange={(v) => setField("absenceEnd", v)}
+                    placeholder="YYYY-MM-DD"
+                  />
+                </div>
+              </div>
+              {boxField("Reasons for absence", "absenceReasons", 2)}
+              {boxField(
+                "Other reasons (e.g. school closure)",
+                "absenceOther",
+                2,
+              )}
+            </section>
+
+            <section className="niot-section">
+              <h3 className="niot-section-title">Training conversation</h3>
+              {boxField(
+                "Deliberate practice / training conversation notes",
+                "trainingConversationNotes",
+                5,
+              )}
+              <div className="tpr-yn-block">
+                {yesNo(
+                  "Mentor-led training conversation completed?",
+                  "mentorLedConversationDone",
+                )}
+              </div>
+            </section>
+
+            <section className="niot-section">
+              <h3 className="niot-section-title">Action steps</h3>
+              {boxField(
+                "Centre-based action step 1 notes",
+                "centreActionStep1",
+                3,
+              )}
+              {boxField(
+                "Centre-based action step 2 notes",
+                "centreActionStep2",
+                3,
+              )}
+              <div className="tpr-yn-block">
+                {yesNo(
+                  "Curriculum Development Task from last week completed?",
+                  "curriculumTaskDone",
+                )}
+              </div>
+            </section>
+
+            <div className="lesson-plan-footer">
+              <div className="lesson-plan-footer-right">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={exporting}
+                  onClick={() => void exportActive()}
+                >
+                  {exporting ? "Preparing Word…" : "Export Word TPR"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={() => remove(active.id)}
+                >
+                  Delete this TPR
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </PlannerPageShell>
   );
@@ -2238,22 +3334,49 @@ function MentorMeetingSheet() {
 function MeetingSheet({
   kind,
   title,
+  section = "Notes",
+  backTo,
+  backLabel,
 }: {
   kind: MeetingNote["kind"];
   title: string;
+  section?: "Notes" | "TPR";
+  backTo?: string;
+  backLabel?: string;
 }) {
   const { school, notes, active, isSaved, save, remove, newSheet, setActiveId } =
     useMeetingNotes(kind);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const isOfOthers = kind === "others";
+
+  async function exportActive() {
+    setExportError(null);
+    setExporting(true);
+    try {
+      await exportObservationDocx(active);
+    } catch (err) {
+      setExportError(
+        err instanceof Error ? err.message : "Could not export Word document.",
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <PlannerPageShell
       school={school}
-      section="Notes"
+      section={section}
       title={title}
-      caption="Observation notes — write on the sheet, not in a popup."
-      backTo={`/school/${school.id}/notes`}
-      backLabel="Notes"
+      caption={
+        isOfOthers
+          ? "Lesson observation (of other teachers) — NIoT proforma with Word export."
+          : "Notes from when you were observed — focus, impact, and development points."
+      }
+      backTo={backTo ?? `/school/${school.id}/notes`}
+      backLabel={backLabel ?? "Notes"}
     >
       <div style={{ gridColumn: "1 / -1" }}>
         <div className="planner-meta">
@@ -2270,6 +3393,16 @@ function MeetingSheet({
               {n.date}
             </button>
           ))}
+          {isOfOthers ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={exporting}
+              onClick={() => void exportActive()}
+            >
+              {exporting ? "Preparing Word…" : "Export Word"}
+            </button>
+          ) : null}
           {isSaved ? (
             <button
               type="button"
@@ -2280,85 +3413,251 @@ function MeetingSheet({
             </button>
           ) : null}
         </div>
-        <div className="obs-layout">
-          <div className="planner-meta">
-            <label>
-              Date
-              <input
-                type="date"
-                value={active.date}
-                onChange={(e) => save({ ...active, date: e.target.value })}
-              />
-            </label>
-            <label>
-              Observed :
-              <input
-                value={active.observed}
-                onChange={(e) => save({ ...active, observed: e.target.value })}
-              />
-            </label>
-          </div>
-          <div className="obs-mid">
-            <div className="obs-box">
-              <div className="planner-label-cell">Focus of observation</div>
-              <PlannerInput
-                multiline
-                value={active.focus}
-                onChange={(v) => save({ ...active, focus: v })}
-              />
-              <div className="planner-label-cell">Subject / year group</div>
-              <PlannerInput
-                value={active.subjectYear}
-                onChange={(v) => save({ ...active, subjectYear: v })}
-              />
+        {exportError ? <p className="form-error">{exportError}</p> : null}
+
+        {isOfOthers ? (
+          <div className="obs-layout obs-of-others">
+            <div className="niot-section">
+              <h3 className="niot-section-title">
+                Lesson observation (of other teachers) proforma
+              </h3>
+              <div className="obs-meta-grid">
+                <div className="obs-box">
+                  <div className="planner-label-cell">Teacher</div>
+                  <PlannerInput
+                    value={active.observed}
+                    onChange={(v) => save({ ...active, observed: v })}
+                  />
+                </div>
+                <div className="obs-box">
+                  <div className="planner-label-cell">
+                    Year group / subject / class
+                  </div>
+                  <PlannerInput
+                    value={active.subjectYear}
+                    onChange={(v) => save({ ...active, subjectYear: v })}
+                  />
+                </div>
+                <div className="obs-box">
+                  <div className="planner-label-cell">Date</div>
+                  <input
+                    className="planner-input"
+                    type="date"
+                    value={active.date}
+                    onChange={(e) =>
+                      save({ ...active, date: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="obs-box">
+                  <div className="planner-label-cell">Topic</div>
+                  <PlannerInput
+                    grow
+                    value={active.topic ?? active.outline}
+                    onChange={(v) =>
+                      save({ ...active, topic: v, outline: v })
+                    }
+                  />
+                </div>
+              </div>
             </div>
-            <div className="obs-box">
-              <div className="planner-label-cell">Lesson outline</div>
-              <PlannerInput
-                multiline
-                rows={6}
-                value={active.outline}
-                onChange={(v) => save({ ...active, outline: v })}
-              />
-            </div>
-          </div>
-          <div className="obs-pair">
-            <div className="obs-box planner-lined">
-              <div className="planner-label-cell">What went well?</div>
-              <PlannerInput
-                lined
-                multiline
-                rows={8}
-                value={active.wentWell}
-                onChange={(v) => save({ ...active, wentWell: v })}
-              />
-            </div>
-            <div className="obs-box planner-lined">
-              <div className="planner-label-cell">What was the impact?</div>
-              <PlannerInput
-                lined
-                multiline
-                rows={8}
-                value={active.impact}
-                onChange={(v) => save({ ...active, impact: v })}
-              />
-            </div>
-          </div>
-          <h2 className="planner-section-title">Top three points for development</h2>
-          <div className="obs-develop">
-            {(["develop1", "develop2", "develop3"] as const).map((key, i) => (
-              <div key={key} className="obs-box">
-                <div className="planner-label-cell">{i + 1}</div>
-                <PlannerInput
-                  multiline
-                  rows={4}
-                  value={active[key]}
-                  onChange={(v) => save({ ...active, [key]: v })}
-                />
+
+            {(
+              [
+                {
+                  title: "Area of focus 1",
+                  focusKey: "focusArea1" as const,
+                  focusFallback: "focus" as const,
+                  strategiesKey: "strategies1" as const,
+                  strategiesFallback: "wentWell" as const,
+                  outcomesKey: "outcomes1" as const,
+                  outcomesFallback: "impact" as const,
+                  commentsKey: "comments1" as const,
+                  strategiesLabel: "Strategies used by the teacher",
+                  outcomesLabel: "Learner outcomes / responses",
+                },
+                {
+                  title: "Area of focus 2",
+                  focusKey: "focusArea2" as const,
+                  focusFallback: null,
+                  strategiesKey: "strategies2" as const,
+                  strategiesFallback: null,
+                  outcomesKey: "outcomes2" as const,
+                  outcomesFallback: null,
+                  commentsKey: "comments2" as const,
+                  strategiesLabel: "Strategies used by the teacher",
+                  outcomesLabel: "Student outcomes / responses",
+                },
+              ]
+            ).map((area) => (
+              <div key={area.title} className="niot-section">
+                <h3 className="niot-section-title">{area.title}</h3>
+                <div className="obs-box">
+                  <div className="planner-label-cell">Focus</div>
+                  <PlannerInput
+                    grow
+                    multiline
+                    rows={2}
+                    value={String(
+                      active[area.focusKey] ??
+                        (area.focusFallback ? active[area.focusFallback] : "") ??
+                        "",
+                    )}
+                    onChange={(v) => {
+                      const patch: Partial<MeetingNote> = {
+                        [area.focusKey]: v,
+                      };
+                      if (area.focusFallback) patch[area.focusFallback] = v;
+                      save({ ...active, ...patch });
+                    }}
+                  />
+                </div>
+                <div className="obs-box">
+                  <div className="planner-label-cell">{area.strategiesLabel}</div>
+                  <PlannerInput
+                    grow
+                    multiline
+                    rows={4}
+                    value={String(
+                      active[area.strategiesKey] ??
+                        (area.strategiesFallback
+                          ? active[area.strategiesFallback]
+                          : "") ??
+                        "",
+                    )}
+                    onChange={(v) => {
+                      const patch: Partial<MeetingNote> = {
+                        [area.strategiesKey]: v,
+                      };
+                      if (area.strategiesFallback)
+                        patch[area.strategiesFallback] = v;
+                      save({ ...active, ...patch });
+                    }}
+                  />
+                </div>
+                <div className="obs-box">
+                  <div className="planner-label-cell">{area.outcomesLabel}</div>
+                  <PlannerInput
+                    grow
+                    multiline
+                    rows={4}
+                    value={String(
+                      active[area.outcomesKey] ??
+                        (area.outcomesFallback
+                          ? active[area.outcomesFallback]
+                          : "") ??
+                        "",
+                    )}
+                    onChange={(v) => {
+                      const patch: Partial<MeetingNote> = {
+                        [area.outcomesKey]: v,
+                      };
+                      if (area.outcomesFallback)
+                        patch[area.outcomesFallback] = v;
+                      save({ ...active, ...patch });
+                    }}
+                  />
+                </div>
+                <div className="obs-box">
+                  <div className="planner-label-cell">Any other comments</div>
+                  <PlannerInput
+                    grow
+                    multiline
+                    rows={3}
+                    value={String(active[area.commentsKey] ?? "")}
+                    onChange={(v) =>
+                      save({ ...active, [area.commentsKey]: v })
+                    }
+                  />
+                </div>
               </div>
             ))}
           </div>
-        </div>
+        ) : (
+          <div className="obs-layout">
+            <div className="planner-meta">
+              <label>
+                Date
+                <input
+                  type="date"
+                  value={active.date}
+                  onChange={(e) => save({ ...active, date: e.target.value })}
+                />
+              </label>
+              <label>
+                Observed by :
+                <input
+                  value={active.observed}
+                  onChange={(e) =>
+                    save({ ...active, observed: e.target.value })
+                  }
+                />
+              </label>
+            </div>
+            <div className="obs-mid">
+              <div className="obs-box">
+                <div className="planner-label-cell">Focus of observation</div>
+                <PlannerInput
+                  multiline
+                  value={active.focus}
+                  onChange={(v) => save({ ...active, focus: v })}
+                />
+                <div className="planner-label-cell">Subject / year group</div>
+                <PlannerInput
+                  value={active.subjectYear}
+                  onChange={(v) => save({ ...active, subjectYear: v })}
+                />
+              </div>
+              <div className="obs-box">
+                <div className="planner-label-cell">Lesson outline</div>
+                <PlannerInput
+                  multiline
+                  rows={6}
+                  value={active.outline}
+                  onChange={(v) => save({ ...active, outline: v })}
+                />
+              </div>
+            </div>
+            <div className="obs-pair">
+              <div className="obs-box planner-lined">
+                <div className="planner-label-cell">What went well?</div>
+                <PlannerInput
+                  lined
+                  multiline
+                  rows={8}
+                  value={active.wentWell}
+                  onChange={(v) => save({ ...active, wentWell: v })}
+                />
+              </div>
+              <div className="obs-box planner-lined">
+                <div className="planner-label-cell">What was the impact?</div>
+                <PlannerInput
+                  lined
+                  multiline
+                  rows={8}
+                  value={active.impact}
+                  onChange={(v) => save({ ...active, impact: v })}
+                />
+              </div>
+            </div>
+            <h2 className="planner-section-title">
+              Top three points for development
+            </h2>
+            <div className="obs-develop">
+              {(["develop1", "develop2", "develop3"] as const).map((key, i) => (
+                <div key={key} className="obs-box">
+                  <div className="planner-label-cell">{i + 1}</div>
+                  <PlannerInput
+                    multiline
+                    rows={4}
+                    value={active[key]}
+                    onChange={(v) => save({ ...active, [key]: v })}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <ConfirmDialog
@@ -2381,10 +3680,22 @@ export function SchoolMentorPage() {
 }
 export function SchoolObservedPage() {
   const school = useSchool();
-  return <Navigate to={`/school/${school.id}/notes`} replace />;
+  return <Navigate to={`/school/${school.id}/observing`} replace />;
 }
 export function SchoolObservingPage() {
-  return <MeetingSheet kind="observing" title="Observation of others" />;
+  return <MeetingSheet kind="observing" title="Being observed" />;
+}
+export function SchoolObservationOfOthersPage() {
+  const school = useSchool();
+  return (
+    <MeetingSheet
+      kind="others"
+      title="Observation of others"
+      section="TPR"
+      backTo={`/school/${school.id}/tpr`}
+      backLabel="TPR"
+    />
+  );
 }
 
 export function SchoolClassroomPracticePage() {

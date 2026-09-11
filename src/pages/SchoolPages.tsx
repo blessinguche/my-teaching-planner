@@ -255,7 +255,7 @@ export function SchoolLessonsPage() {
             <div>
               <strong>{l.title}</strong>
               <p className="hint">
-                {[l.className, l.objectives].filter(Boolean).join(" · ")}
+                {[l.teachingGroup, l.objectives].filter(Boolean).join(" · ")}
               </p>
             </div>
           </li>
@@ -266,20 +266,29 @@ export function SchoolLessonsPage() {
         title="Add lesson plan"
         fields={[
           { name: "date", label: "Date", type: "date", required: true, defaultValue: todayISO() },
-          { name: "title", label: "Title", required: true },
-          { name: "className", label: "Class" },
-          { name: "objectives", label: "Objectives", type: "textarea" },
-          { name: "notes", label: "Notes", type: "textarea" },
+          { name: "title", label: "Lesson topic / title", required: true },
+          { name: "teachingGroup", label: "Teaching group" },
+          { name: "objectives", label: "Lesson objective(s)", type: "plain" },
         ]}
         onClose={() => setOpen(false)}
         onSubmit={(v) =>
           addLesson({
             schoolId: school.id,
+            teacher: "",
             date: v.date,
+            teachingGroup: v.teachingGroup || "",
             title: v.title,
-            className: v.className || undefined,
-            objectives: v.objectives || undefined,
-            notes: v.notes || undefined,
+            objectives: v.objectives || "",
+            review: "",
+            startingFrom: "",
+            endGoal: "",
+            coreKnowledge: "",
+            checkpointCheck: "",
+            misconceptions: "",
+            findMisconceptions: "",
+            vocabulary: "",
+            mentorFocus: "",
+            sequence: [],
           })
         }
       />

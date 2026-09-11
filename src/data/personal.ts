@@ -9,6 +9,7 @@ import type {
   CaptureItem,
   CalendarWeekNote,
   ClassroomPracticeNote,
+  TraineeProgressRecord,
   ClassGroup,
   CommsLog,
   ContactEntry,
@@ -61,6 +62,16 @@ export type AccountPayload = {
   assessmentDone: Record<string, boolean>;
   assessmentNotes: Record<string, string>;
   resourceNotes: Record<string, string>;
+  /** Edits to seed resources (url, name, description, …) that must survive reload. */
+  seedResourceOverrides: Record<
+    string,
+    Partial<
+      Pick<
+        ResourceLink,
+        "name" | "url" | "description" | "category" | "file" | "localPath" | "notes"
+      >
+    >
+  >;
   customGlossary: GlossaryEntry[];
   customAcronyms: Acronym[];
   customEvents: PlannerEvent[];
@@ -96,6 +107,7 @@ export type AccountPayload = {
   placementOverviews: PlacementOverview[];
   calendarWeekNotes: CalendarWeekNote[];
   classroomPracticeNotes: ClassroomPracticeNote[];
+  traineeProgressRecords: TraineeProgressRecord[];
   /** Capture notes/transcripts (audio blobs stay device-local). */
   captures: CaptureItem[];
 };
@@ -118,6 +130,7 @@ export function emptyAccount(): AccountPayload {
     assessmentDone: {},
     assessmentNotes: {},
     resourceNotes: {},
+    seedResourceOverrides: {},
     customGlossary: [],
     customAcronyms: [],
     customEvents: [],
@@ -156,8 +169,27 @@ export function accountFromFullDump(
     if (a.notes?.trim()) assessmentNotes[a.id] = a.notes;
   }
   const resourceNotes: Record<string, string> = {};
+  const seedResourceOverrides: AccountPayload["seedResourceOverrides"] = {};
   for (const r of data.resources ?? []) {
-    if (seedRes.has(r.id) && r.notes?.trim()) resourceNotes[r.id] = r.notes;
+    if (!seedRes.has(r.id)) continue;
+    const seedR = seed.resources.find((s) => s.id === r.id);
+    if (!seedR) continue;
+    const override: AccountPayload["seedResourceOverrides"][string] = {};
+    if (r.name !== seedR.name) override.name = r.name;
+    if ((r.url || "") !== (seedR.url || "")) override.url = r.url || "";
+    if ((r.description || "") !== (seedR.description || "")) {
+      override.description = r.description || "";
+    }
+    if (r.category !== seedR.category) override.category = r.category;
+    if (r.localPath !== seedR.localPath) override.localPath = r.localPath;
+    if (r.file) override.file = r.file;
+    if (r.notes?.trim()) {
+      resourceNotes[r.id] = r.notes;
+      override.notes = r.notes;
+    }
+    if (Object.keys(override).length > 0) {
+      seedResourceOverrides[r.id] = override;
+    }
   }
 
   return {
@@ -171,6 +203,7 @@ export function accountFromFullDump(
     assessmentDone,
     assessmentNotes,
     resourceNotes,
+    seedResourceOverrides,
     customGlossary: (data.glossary ?? []).filter((g) => !seedGloss.has(g.id)),
     customAcronyms: (data.acronyms ?? []).filter((a) => !seedAcr.has(a.id)),
     customEvents: (data.events ?? []).filter((e) => !seedEvt.has(e.id)),
@@ -208,6 +241,7 @@ export function accountFromFullDump(
     placementOverviews: data.placementOverviews ?? [],
     calendarWeekNotes: data.calendarWeekNotes ?? [],
     classroomPracticeNotes: data.classroomPracticeNotes ?? [],
+    traineeProgressRecords: data.traineeProgressRecords ?? [],
     captures: (data.captures ?? []).map((c) => ({
       ...c,
       // Keep id for cross-device note sync; audio bytes stay in local vault
@@ -223,12 +257,16 @@ export function scoreAccount(p: AccountPayload): number {
     Object.keys(p.srs).length +
     Object.keys(p.glossaryNotes).length +
     Object.keys(p.assessmentDone).length +
+    Object.keys(p.seedResourceOverrides ?? {}).length +
     p.customGlossary.length +
     p.customEvents.length +
     p.customAssessments.length +
+    p.customResources.length +
     p.schools.length +
     p.students.length +
-    p.lessons.length
+    p.lessons.length +
+    p.logins.length +
+    p.finds.length
   );
 }
 
@@ -269,6 +307,7 @@ function asAccount(parsed: Partial<AccountPayload> & Partial<AppData>): AccountP
     assessmentDone: parsed.assessmentDone ?? {},
     assessmentNotes: parsed.assessmentNotes ?? {},
     resourceNotes: parsed.resourceNotes ?? {},
+    seedResourceOverrides: parsed.seedResourceOverrides ?? {},
     customGlossary: parsed.customGlossary ?? [],
     customAcronyms: parsed.customAcronyms ?? [],
     customEvents: parsed.customEvents ?? [],
@@ -306,6 +345,8 @@ function asAccount(parsed: Partial<AccountPayload> & Partial<AppData>): AccountP
     calendarWeekNotes: parsed.calendarWeekNotes ?? bits.calendarWeekNotes,
     classroomPracticeNotes:
       parsed.classroomPracticeNotes ?? bits.classroomPracticeNotes,
+    traineeProgressRecords:
+      parsed.traineeProgressRecords ?? bits.traineeProgressRecords,
     captures: parsed.captures ?? [],
   };
 }
@@ -493,10 +534,17 @@ export function composeAppData(
     ].sort((a, b) => a.date.localeCompare(b.date)),
     tasks: account.tasks,
     resources: [
-      ...shared.resources.map((r) => ({
-        ...r,
-        notes: account.resourceNotes[r.id] ?? "",
-      })),
+      ...shared.resources.map((r) => {
+        const override = account.seedResourceOverrides?.[r.id] ?? {};
+        return {
+          ...r,
+          ...override,
+          notes:
+            override.notes ??
+            account.resourceNotes[r.id] ??
+            "",
+        };
+      }),
       ...account.customResources,
     ],
     reminders: account.reminders,
@@ -532,6 +580,7 @@ export function composeAppData(
     placementOverviews: account.placementOverviews ?? [],
     calendarWeekNotes: account.calendarWeekNotes ?? [],
     classroomPracticeNotes: account.classroomPracticeNotes ?? [],
+    traineeProgressRecords: account.traineeProgressRecords ?? [],
   };
 }
 

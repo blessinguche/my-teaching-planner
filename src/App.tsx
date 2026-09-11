@@ -29,9 +29,12 @@ import {
   SchoolNotesHubPage,
   SchoolObservedPage,
   SchoolObservingPage,
+  SchoolObservationOfOthersPage,
   SchoolOverviewPage,
   SchoolPlanningPage,
+  SchoolLessonPlanPage,
   SchoolProudPage,
+  SchoolTprPage,
   SchoolRecordsTrackersPage,
   SchoolResourcesFindsPage,
   SchoolRolesPage,
@@ -78,10 +81,17 @@ export default function App() {
               <Route path="focus" element={<SchoolFocusPage />} />
               <Route path="calendar" element={<SchoolCalendarSpreadPage />} />
               <Route path="planning" element={<SchoolPlanningPage />} />
+              <Route path="lesson-plan" element={<SchoolLessonPlanPage />} />
+              <Route path="lessons" element={<SchoolRedirect to="lesson-plan" />} />
               <Route path="timetable" element={<SchoolTimetableSpreadPage />} />
               <Route path="training" element={<SchoolTargetsPage />} />
               <Route path="targets" element={<SchoolRedirect to="training" />} />
               <Route path="notes" element={<SchoolNotesHubPage />} />
+              <Route path="tpr" element={<SchoolTprPage />} />
+              <Route
+                path="observation-of-others"
+                element={<SchoolObservationOfOthersPage />}
+              />
               <Route path="mentor" element={<SchoolMentorPage />} />
               <Route path="observed" element={<SchoolObservedPage />} />
               <Route path="observing" element={<SchoolObservingPage />} />
@@ -112,7 +122,6 @@ export default function App() {
               <Route path="behaviour" element={<SchoolRedirect to="records#behaviour" />} />
               <Route path="grades" element={<SchoolRedirect to="records#grades" />} />
               <Route path="homework" element={<SchoolRedirect to="records#homework" />} />
-              <Route path="lessons" element={<SchoolRedirect to="planning" />} />
               <Route path="terms" element={<SchoolRedirect to="calendar" />} />
               <Route path="todos" element={<SchoolRedirect to="planning" />} />
               <Route path="goals" element={<SchoolRedirect to="training" />} />
